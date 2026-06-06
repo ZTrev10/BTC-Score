@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Trevor's Daily Tracker</title>
+<title>Trevor's Daily Tracker — v2.3.1-source-reset-2026-06-06</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -96,6 +96,7 @@ td strong{color:#c8caee;font-weight:500;}
 </style>
 </head>
 <body>
+<!-- APP_VERSION: v2.3.1-source-reset-2026-06-06 -->
 
 <div class="tab-bar">
   <div class="tab active" onclick="switchTab('brief')">📰 DAILY BRIEF</div>
@@ -176,6 +177,19 @@ td strong{color:#c8caee;font-weight:500;}
       <div id="score-breakdown" class="explain-body">Waiting for full indicator set. Fear & Greed alone is not the BTC Cycle Score.</div>
     </div>
 
+    
+    <div class="card">
+      <p class="section-label">BTC / ETH DEPLOYMENT ENGINE</p>
+      <div class="score-mini">
+        <div class="score-mini-num" id="btc-deploy-score" style="color:#3a3d6a;">—</div>
+        <div>
+          <div id="btc-deploy-zone" style="font-size:12px;color:#6a6d9a;letter-spacing:0.12em;margin-bottom:4px;">LOAD BTC SCORE</div>
+          <div id="btc-deploy-note" style="font-size:11px;color:#5a5d8a;line-height:1.6;">Base DCA: $250 BTC / $50 ETH. Reserve capital only activates when BTC Score is below 20 and BTC is 15–20% below recent high.</div>
+        </div>
+      </div>
+      <div id="btc-reserve-ladder"></div>
+    </div>
+
     <div class="ind-grid" id="ind-grid"></div>
 
     <div class="card">
@@ -221,16 +235,14 @@ td strong{color:#c8caee;font-weight:500;}
     <button class="btn" onclick="renderOpportunities()">↻ Refresh Ranking</button>
   </div>
 
+  
   <div class="card">
-    <p class="section-label">BTC RESERVE DEPLOYMENT ENGINE</p>
-    <div class="score-mini">
-      <div class="score-mini-num" id="opp-cycle-score" style="color:#3a3d6a;">—</div>
-      <div>
-        <div id="opp-cycle-zone" style="font-size:12px;color:#6a6d9a;letter-spacing:0.12em;margin-bottom:4px;">LOAD BTC SCORE FIRST</div>
-        <div id="opp-deploy-note" style="font-size:11px;color:#5a5d8a;line-height:1.6;">Base DCA remains $250 BTC / $50 ETC. Reserve capital only activates when BTC Score is below 20 and BTC is 15–20% below recent high.</div>
-      </div>
+    <p class="section-label">METHODOLOGY / TRUTH STATUS</p>
+    <div class="detail-grid">
+      <div class="detail-box"><div class="detail-label">OPPORTUNITIES</div><div class="detail-text">Stock-only. Intended rule: solid company + 5%+ drop + identifiable negative news + thesis not broken + valuation improved. Current cards are transparent examples until live screener APIs are connected.</div></div>
+      <div class="detail-box"><div class="detail-label">EMERGING LEADERS</div><div class="detail-text">Not just mega-cap AI. Looks for themes gaining strength: grid, water, defense, healthcare, public safety software, infrastructure, and other macro/political/world-event beneficiaries.</div></div>
+      <div class="detail-box"><div class="detail-label">NEWS SOURCES</div><div class="detail-text">Daily Brief attempts /api/news. If unavailable, it clearly shows live-news unavailable instead of reverting to stale hardcoded headlines.</div></div>
     </div>
-    <div id="reserve-ladder"></div>
   </div>
 
   <div id="opportunity-list"></div>
@@ -285,7 +297,7 @@ td strong{color:#c8caee;font-weight:500;}
   <div class="card">
     <p class="section-label">ADD / UPDATE HOLDING</p>
     <div class="form-grid">
-      <input class="small-input" id="h-symbol" placeholder="Symbol e.g. BTC, ETC, NVDA">
+      <input class="small-input" id="h-symbol" placeholder="Symbol e.g. BTC, ETH, META">
       <input class="small-input" id="h-qty" type="number" step="any" placeholder="Quantity">
       <input class="small-input" id="h-cost" type="number" step="any" placeholder="Avg cost">
       <input class="small-input" id="h-price" type="number" step="any" placeholder="Current price">
@@ -306,6 +318,7 @@ td strong{color:#c8caee;font-weight:500;}
 </div>
 
 <script>
+window.APP_VERSION = "v2.3.1-source-reset-2026-06-06";
 const S={key:'',calls:0};
 const BG_DAILY_LIMIT=15;
 const BG_CALLS_PER_FULL_REFRESH=3;
@@ -595,8 +608,8 @@ async function loadBrief(){
   let fg=null,btcP=null,ethP=null,btcChg=null,ethChg=null,ma200=null,rpProxy=null;
   try{const r=await fetch('https://api.alternative.me/fng/?limit=1');const d=await r.json();fg=parseInt(d.data[0].value);}catch(e){}
   try{
-    const r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum-classic&vs_currencies=usd&include_24hr_change=true');
-    const d=await r.json();btcP=d.bitcoin?.usd;ethP=d['ethereum-classic']?.usd;btcChg=d.bitcoin?.usd_24h_change;ethChg=d['ethereum-classic']?.usd_24h_change;
+    const r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true');
+    const d=await r.json();btcP=d.bitcoin?.usd;ethP=d['ethereum']?.usd;btcChg=d.bitcoin?.usd_24h_change;ethChg=d['ethereum']?.usd_24h_change;
   }catch(e){}
   try{
     const r=await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1500&interval=daily');
@@ -619,7 +632,7 @@ async function loadBrief(){
         <div class="score-mini-num" style="color:${scoreCol};">${scoreNum}</div>
         <div>
           <div style="font-size:12px;color:${scoreCol};letter-spacing:0.12em;margin-bottom:4px;">${scoreLbl}</div>
-          <div style="font-size:11px;color:#5a5d8a;">BTC ${btcP?'$'+btcP.toLocaleString(undefined,{maximumFractionDigits:0}):'—'}${chgStr(btcChg)} · ETC ${ethP?'$'+ethP.toLocaleString(undefined,{maximumFractionDigits:2}):'—'}${chgStr(ethChg)}</div>
+          <div style="font-size:11px;color:#5a5d8a;">BTC ${btcP?'$'+btcP.toLocaleString(undefined,{maximumFractionDigits:0}):'—'}${chgStr(btcChg)} · ETH ${ethP?'$'+ethP.toLocaleString(undefined,{maximumFractionDigits:2}):'—'}${chgStr(ethChg)}</div>
           <div style="font-size:11px;color:#5a5d8a;margin-top:3px;">${maAbove} · Realized proxy ${rpProxy?'$'+Math.round(rpProxy).toLocaleString():'—'}</div>
           <div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Fear & Greed <span style="color:${fgCol};">${fg!==null?fg+' / 100 ('+fgLbl+')':'—'}</span></div>
         </div>
@@ -631,104 +644,70 @@ async function loadBrief(){
       <div id="brief-opportunity-mini"></div>
       <p style="font-size:10px;color:#2a2d50;font-style:italic;margin-top:10px;">Open the Opportunities tab for expandable rationale and full ranking.</p>
     </div>
+    
     <div class="card">
-      <p class="section-label" style="margin-bottom:14px;">₿ CRYPTO HEADLINES</p>
-      <div class="news-item">
-        <span class="news-tag" style="color:#E24B4A;border-color:#E24B4A;">BTC</span>
-        <div class="news-title">BTC slides to ~$67K — down 9.5% in 7 days</div>
-        <div class="news-body">Spot Bitcoin ETFs recorded $1.42B in outflows in one week — third straight week of institutional selling, totaling $4.21B. Risk-off rotation into AI equities as S&P hits record highs. ATH was $128K in Oct 2025. <span style="color:#BA7517;">Consistent with prior mid-cycle corrections before the next leg up.</span></div>
-      </div>
-      <div class="news-item">
-        <span class="news-tag" style="color:#5a5daa;border-color:#5a5daa;">ETH</span>
-        <div class="news-title">ETH opens below $2,000 — 60% below Aug 2025 ATH</div>
-        <div class="news-body">ETF outflows total $712M over three weeks. Bitmine (Tom Lee) targeting 5% of all ETH supply. Standard Chartered maintains $40K ETH target by 2030.</div>
-      </div>
-      <div class="news-item">
-        <span class="news-tag" style="color:#639922;border-color:#639922;">REG</span>
-        <div class="news-title">CFTC clears Coinbase for global crypto perpetual futures</div>
-        <div class="news-body">Regulatory green light for Coinbase derivatives expansion globally — structurally positive for crypto infrastructure long-term.</div>
-      </div>
-    </div>
-    <div class="card">
-      <p class="section-label" style="margin-bottom:14px;">📈 STOCK MARKET & NOTABLE MOVERS</p>
-      <div class="news-item">
-        <div class="news-title">S&P 500 at record highs while crypto sells off</div>
-        <div class="news-body">Capital rotating from crypto into AI and tech. Crypto-specific risk-off, not a broad market fear event — a healthier macro sign overall.</div>
-      </div>
-      <div class="news-item">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <div class="news-title" style="margin-bottom:0;">Broadcom (AVGO) — Earnings today</div>
-          <span class="news-tag" style="color:#ffe066;border-color:#ffe066;margin-bottom:0;">WATCH</span>
+      <p class="section-label" style="margin-bottom:14px;">📰 LIVE MARKET HEADLINES</p>
+      <div id="live-news-list">
+        <div class="news-item">
+          <div class="news-title">Loading fresh headlines…</div>
+          <div class="news-body">The brief now attempts to load fresh market, macro, and news items from /api/news on every app open. Hardcoded stale headlines have been removed.</div>
         </div>
-        <div class="news-body">$2T AI infrastructure giant reports Q2 FY26. Doubled GAAP earnings FY21–25. Analysts see 12% upside at 31x forward earnings. Every AI cluster needs Broadcom networking silicon — true picks-and-shovels.</div>
-      </div>
-      <div class="news-item">
-        <div class="news-title" style="color:#E24B4A;">⚠ -5%+ Drops to Watch</div>
-        <div class="news-body">COIN, MSTR, MARA, RIOT likely down 5–15% in sympathy with BTC's drop. These amplify BTC moves 2–3x. Monitor for entry if bullish on BTC recovery.</div>
       </div>
     </div>
-    <div class="card">
-      <p class="section-label" style="margin-bottom:14px;">🤖 AI STOCKS & PICKS-AND-SHOVELS</p>
-      <p style="font-size:11px;color:#5a5d8a;margin-bottom:12px;line-height:1.6;">Hyperscalers guiding $725B in AI capex for 2026. Picks-and-shovels suppliers get paid regardless of which lab wins.</p>
-      <div class="ai-grid">
-        <div class="ai-box"><div class="ai-box-lbl">CHIPS</div><div class="ai-box-val">NVDA · AMD · MU</div><div class="ai-box-sub">Core AI compute</div></div>
-        <div class="ai-box"><div class="ai-box-lbl">SERVERS & COOLING</div><div class="ai-box-val">SMCI · JBL</div><div class="ai-box-sub">AI server racks</div></div>
-        <div class="ai-box"><div class="ai-box-lbl">POWER</div><div class="ai-box-val">CEG · VST · VRT</div><div class="ai-box-sub">Data center energy</div></div>
-        <div class="ai-box"><div class="ai-box-lbl">NETWORKING</div><div class="ai-box-val">ANET · AVGO</div><div class="ai-box-sub">Interconnect fabric</div></div>
-      </div>
-      <div class="news-item" style="margin-top:12px;">
-        <div class="news-title">Spotlight: Jabil (JBL) & Micron (MU)</div>
-        <div class="news-body"><strong style="color:#9a9dcc;">JBL:</strong> AI is Jabil's primary growth driver — AI server racks, liquid cooling, data center power. Guiding 35% AI revenue growth to $12.1B in FY26.<br><br><strong style="color:#9a9dcc;">MU:</strong> One of only 3 global HBM producers. AI HBM demand forecast to grow 5x by 2027. Trading at a discount to peers.</div>
-      </div>
-    </div>
-    <div class="card">
-      <p class="section-label" style="margin-bottom:14px;">🔭 SECTOR OPPORTUNITY RADAR</p>
-      <div class="news-item">
-        <div class="news-title">Nuclear & Power Infrastructure</div>
-        <div class="news-body">AI data centers are power-hungry and the grid is constrained. CEG, VST, and SMR plays are a secular theme independent of crypto or tech cycles.</div>
-      </div>
-      <div class="news-item">
-        <div class="news-title">Crypto-adjacent equities (beaten down)</div>
-        <div class="news-body">COIN, MSTR, MARA, RIOT — leveraged BTC proxies down hard today. High conviction needed. These amplify BTC recovery 2–3x.</div>
-      </div>
-      <div class="news-item">
-        <div class="news-title">Defense & Autonomous Systems</div>
-        <div class="news-body">Autonomous aviation (MRLN), drone warfare, AI-guided defense accelerating globally. LMT, RTX, KTOS alongside speculative plays like MRLN worth watching.</div>
-      </div>
-    </div>
+    
     <p class="footer-note">Not financial advice · Prices: CoinGecko · Sentiment: Alternative.me · News refreshes on demand</p>
   `;
   try{const top=[...WATCHLIST].map(i=>({...i,score:opportunityScore(i)})).sort((a,b)=>b.score-a.score)[0];const act=actionFor(top.score,top.thesis,top.confidence);const d=deploymentForScore(currentCycleScore());document.getElementById('brief-opportunity-mini').innerHTML=`<div class="score-mini"><div class="score-mini-num" style="color:${act.color};">${top.score}</div><div><div style="font-size:12px;color:${act.color};letter-spacing:0.12em;margin-bottom:4px;">${top.ticker} · ${act.label}</div><div style="font-size:11px;color:#5a5d8a;line-height:1.6;">Down ${pct(top.drop)} · ${top.reason}</div><div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Reserve suggestion: ${money(d.amount)} if BTC Score and price drawdown triggers are both met.</div></div></div>`;}catch(e){}
   document.getElementById('brief-loading').style.display='none';
   document.getElementById('brief-content').style.display='block';
+  try{loadLiveNews();}catch(e){}
   btn.disabled=false;btn.textContent='↻ Refresh Brief';
 }
 
 
 
+async function loadLiveNews(){
+  const box=document.getElementById('live-news-list');
+  if(!box)return;
+  try{
+    const r=await fetch('/api/news?ts='+Date.now());
+    if(!r.ok)throw new Error('news api '+r.status);
+    const d=await r.json();
+    const items=(d.items||d.news||[]).slice(0,12);
+    if(!items.length)throw new Error('no items');
+    box.innerHTML=items.map(n=>`<div class="news-item">
+      <div class="news-title">${n.title||'Untitled headline'}</div>
+      <div class="news-body">${n.source?`${n.source} · `:''}${n.publishedAt||n.published||''}${n.summary?` · ${n.summary}`:''}</div>
+    </div>`).join('');
+  }catch(e){
+    box.innerHTML=`<div class="news-item">
+      <div class="news-title">Live news route unavailable</div>
+      <div class="news-body">Add /api/news.js later for fresh headlines. This build intentionally avoids stale hardcoded market headlines.</div>
+    </div>`;
+  }
+}
+
 const RESERVE_TOTAL=300000;
-const BASE_DCA={BTC:250,ETC:50};
+const BASE_DCA={BTC:250,ETH:50};
 const WATCHLIST=[
-  {ticker:'BTC',name:'Bitcoin',type:'crypto',drop:-6.2,reason:'Fear-driven crypto drawdown / ETF flow pressure placeholder',thesis:96,confidence:82,quality:95,newsSeverity:35},
-  {ticker:'ETC',name:'Ethereum Classic',type:'crypto',drop:-5.4,reason:'Broad crypto weakness; higher beta than BTC',thesis:68,confidence:58,quality:62,newsSeverity:42},
-  {ticker:'NVDA',name:'NVIDIA',type:'stock',drop:-5.8,reason:'Example: export restriction / AI capex concern',thesis:91,confidence:78,quality:96,newsSeverity:38},
-  {ticker:'AVGO',name:'Broadcom',type:'stock',drop:-4.9,reason:'Example: earnings volatility / valuation reset',thesis:88,confidence:70,quality:92,newsSeverity:32},
-  {ticker:'COIN',name:'Coinbase',type:'stock',drop:-8.4,reason:'Crypto sentiment and BTC-linked equity pressure',thesis:78,confidence:66,quality:74,newsSeverity:50},
-  {ticker:'MSTR',name:'MicroStrategy',type:'stock',drop:-9.8,reason:'BTC beta and treasury-premium compression',thesis:64,confidence:55,quality:58,newsSeverity:56}
+  {ticker:'META',name:'Meta Platforms',type:'stock',drop:-6.0,reason:'Example: regulatory or reputation shock; classify whether ad engine/network effects remain intact',thesis:86,confidence:68,quality:90,newsSeverity:44,category:'Quality compounder'},
+  {ticker:'CPRT',name:'Copart',type:'stock',drop:-5.2,reason:'Example: temporary auto-cycle fear; check whether long-term salvage auction moat remains intact',thesis:84,confidence:64,quality:88,newsSeverity:36,category:'Under-the-radar compounder'},
+  {ticker:'FIX',name:'Comfort Systems USA',type:'stock',drop:-5.5,reason:'Example: construction/margin selloff; check data center and mechanical services backlog',thesis:80,confidence:60,quality:82,newsSeverity:40,category:'Infrastructure beneficiary'},
+  {ticker:'PWR',name:'Quanta Services',type:'stock',drop:-5.1,reason:'Example: utility/grid capex fear; check grid modernization backlog',thesis:82,confidence:62,quality:84,newsSeverity:38,category:'Grid modernization'},
+  {ticker:'AXON',name:'Axon Enterprise',type:'stock',drop:-5.8,reason:'Example: valuation reset; check recurring software and public safety platform thesis',thesis:83,confidence:61,quality:85,newsSeverity:42,category:'Public safety / software'},
+  {ticker:'TMDX',name:'TransMedics',type:'stock',drop:-7.0,reason:'Example: healthcare growth-stock selloff; check transplant logistics execution and margin path',thesis:72,confidence:55,quality:70,newsSeverity:50,category:'Emerging healthcare'}
 ];
 const EMERGING_LEADERS=[
-  {ticker:'NVDA',name:'NVIDIA',theme:'AI compute / accelerated data center',leader:94,revenue:95,guidance:90,narrative:98,institutional:88,retail:72,entry:'Watch for pullbacks tied to export headlines or valuation resets, not AI demand impairment.',risk:'Custom silicon competition, China restrictions, AI capex digestion.'},
-  {ticker:'AVGO',name:'Broadcom',theme:'AI networking / custom silicon',leader:89,revenue:84,guidance:86,narrative:92,institutional:88,retail:55,entry:'Attractive on earnings overreaction or broad semiconductor selloff if AI networking thesis remains intact.',risk:'Valuation, customer concentration, integration risk.'},
-  {ticker:'ANET',name:'Arista Networks',theme:'AI data center networking',leader:86,revenue:82,guidance:84,narrative:91,institutional:82,retail:48,entry:'Look for 5–10% drops on margin or capex fears where cloud networking demand remains strong.',risk:'Cloud capex cycles, hyperscaler concentration.'},
-  {ticker:'VRT',name:'Vertiv',theme:'Data center power and cooling',leader:87,revenue:88,guidance:86,narrative:93,institutional:80,retail:62,entry:'Prefer pullbacks caused by valuation or temporary margin worries; theme remains tied to AI data center buildout.',risk:'Execution, cyclicality, stretched expectations.'},
-  {ticker:'CEG',name:'Constellation Energy',theme:'Nuclear / AI power demand',leader:84,revenue:70,guidance:78,narrative:94,institutional:83,retail:50,entry:'Best watched on regulatory or power-price fear, not if nuclear thesis or contracts deteriorate.',risk:'Regulatory risk, power pricing, political risk.'},
-  {ticker:'PLTR',name:'Palantir',theme:'AI operating systems / defense + enterprise',leader:81,revenue:78,guidance:86,narrative:90,institutional:70,retail:84,entry:'Retail enthusiasm is high, so require a deeper valuation reset or evidence of sustained acceleration.',risk:'Valuation, retail crowding, growth expectations.'},
-  {ticker:'COIN',name:'Coinbase',theme:'Crypto rails / institutional adoption',leader:76,revenue:74,guidance:68,narrative:82,institutional:65,retail:75,entry:'Consider when crypto panic drives the stock down but regulatory/business thesis remains intact.',risk:'Crypto cycle beta, regulation, fee compression.'},
-  {ticker:'RKLB',name:'Rocket Lab',theme:'Space infrastructure',leader:70,revenue:76,guidance:70,narrative:78,institutional:58,retail:80,entry:'Speculative leader candidate. Smaller sizing; require execution progress and avoid pure hype entries.',risk:'Unprofitability, launch risk, high retail enthusiasm.'}
+  {ticker:'FIX',name:'Comfort Systems USA',theme:'Data center mechanical systems / HVAC / cooling infrastructure',leader:84,revenue:86,guidance:80,narrative:86,institutional:70,retail:35,entry:'Look for pullbacks tied to construction cyclicality, not backlog deterioration.',risk:'Cyclicality, labor costs, project execution.'},
+  {ticker:'PWR',name:'Quanta Services',theme:'Grid modernization / transmission buildout / electrification',leader:83,revenue:78,guidance:82,narrative:88,institutional:76,retail:32,entry:'Attractive on utility-rate or project-delay fears if long-term grid capex remains intact.',risk:'Regulation, project delays, utility spending cycles.'},
+  {ticker:'AXON',name:'Axon Enterprise',theme:'Public safety software, devices, evidence cloud, AI-assisted policing workflow',leader:82,revenue:84,guidance:80,narrative:78,institutional:74,retail:48,entry:'Prefer valuation resets; thesis depends on recurring software expansion.',risk:'Valuation, public-sector budget cycles, controversy/regulation.'},
+  {ticker:'TMDX',name:'TransMedics',theme:'Organ transplant logistics and medical device platform',leader:75,revenue:88,guidance:72,narrative:76,institutional:60,retail:58,entry:'Speculative growth leader candidate. Size smaller and require execution confirmation.',risk:'Execution, reimbursement, margin path.'},
+  {ticker:'KTOS',name:'Kratos Defense',theme:'Drone warfare / autonomous defense systems / geopolitical rearmament',leader:74,revenue:70,guidance:68,narrative:86,institutional:58,retail:62,entry:'Watch political/defense budget catalysts and contract momentum; avoid chasing spikes.',risk:'Contract timing, defense budget cycles, profitability.'},
+  {ticker:'MWA',name:'Mueller Water Products',theme:'Water infrastructure replacement / municipal resilience',leader:69,revenue:62,guidance:66,narrative:78,institutional:52,retail:22,entry:'Early/quiet theme. Look for evidence of order acceleration from water infrastructure spend.',risk:'Municipal budgets, slow growth, cyclicality.'}
 ];
 
 const FEATURES=[
-  {name:'Opportunity Feed',status:'YES',body:'Ranks BTC, ETC, and watchlist stocks by Opportunity Score. Surfaces only useful buy/watch/avoid candidates rather than ticker noise.',data:'Live price, 24h/7d change, confirmed news trigger, cycle score, watchlist fundamentals.',difficulty:'Medium'},
+  {name:'Opportunity Feed',status:'YES',body:'Ranks BTC, ETH, and watchlist stocks by Opportunity Score. Surfaces only useful buy/watch/avoid candidates rather than ticker noise.',data:'Live price, 24h/7d change, confirmed news trigger, cycle score, watchlist fundamentals.',difficulty:'Medium'},
   {name:'Why Is It Down?',status:'YES',body:'Expandable explanation of the bad news, how much the asset is down, and whether the drop appears temporary or thesis-breaking.',data:'News feed + price move + confidence tagging.',difficulty:'Medium'},
   {name:'Thesis Integrity Score',status:'YES',body:'Separates a normal panic selloff from a business/model impairment. For stocks, this should consider growth, FCF, debt, moat, valuation, and management credibility.',data:'Fundamental snapshots and manual watchlist assumptions in V1.',difficulty:'Medium'},
   {name:'Confidence Score',status:'YES',body:'Shows how reliable the recommendation is. A high Opportunity Score with low confidence should become Watch, not Buy.',data:'News quality, consistency across sources, price move magnitude, historical precedent.',difficulty:'Medium'},
@@ -757,9 +736,9 @@ function deploymentForScore(score){
 function opportunityScore(item){
   const cycle=currentCycleScore();
   const dropScore=Math.min(100,Math.max(0,Math.abs(item.drop)*8));
-  const cycleBoost=item.type==='crypto'&&cycle!==null ? Math.max(0,100-cycle*3) : 55;
+  const cycleBoost=55;
   const newsOpportunity=Math.max(0,100-item.newsSeverity);
-  return Math.round(dropScore*0.20 + item.quality*0.25 + item.thesis*0.25 + item.confidence*0.15 + (item.type==='crypto'?cycleBoost:newsOpportunity)*0.15);
+  return Math.round(dropScore*0.20 + item.quality*0.25 + item.thesis*0.25 + item.confidence*0.15 + newsOpportunity*0.15);
 }
 function renderReserveLadder(){
   const score=currentCycleScore();
@@ -767,15 +746,14 @@ function renderReserveLadder(){
   const rows=[
     ['>20','DCA only','$0'],['15–20','First allocation','$30,000'],['10–15','Aggressive allocation','$60,000'],['5–10','Major allocation','$90,000'],['<5','Maximum opportunity','$120,000']
   ];
-  document.getElementById('opp-cycle-score').textContent=score===null?'—':score;
-  document.getElementById('opp-cycle-score').style.color=score===null?'#3a3d6a':col(score);
-  document.getElementById('opp-cycle-zone').textContent=d.zone;
-  document.getElementById('opp-cycle-zone').style.color=score===null?'#6a6d9a':col(score);
-  document.getElementById('opp-deploy-note').innerHTML=`Base DCA: <strong style="color:#c8caee;">$${BASE_DCA.BTC} BTC / $${BASE_DCA.ETC} ETC</strong>. ${d.copy} Suggested reserve deploy now: <strong style="color:#c8caee;">${money(d.amount)}</strong>.`;
-  document.getElementById('reserve-ladder').innerHTML=rows.map(r=>{
+  ['opp-cycle-score','btc-deploy-score'].forEach(id=>{const el=document.getElementById(id); if(el){el.textContent=score===null?'—':score;el.style.color=score===null?'#3a3d6a':col(score);}});
+  ['opp-cycle-zone','btc-deploy-zone'].forEach(id=>{const el=document.getElementById(id); if(el){el.textContent=d.zone;el.style.color=score===null?'#6a6d9a':col(score);}});
+  ['opp-deploy-note','btc-deploy-note'].forEach(id=>{const el=document.getElementById(id); if(el)el.innerHTML=`Base DCA: <strong style="color:#c8caee;">$${BASE_DCA.BTC} BTC / $${BASE_DCA.ETH} ETH</strong>. ${d.copy} Suggested reserve deploy now: <strong style="color:#c8caee;">${money(d.amount)}</strong>.`;});
+  const ladderHtml=rows.map(r=>{
     const active=(score!==null&&((r[0]==='>20'&&score>20)||(r[0]==='15–20'&&score<=20&&score>15)||(r[0]==='10–15'&&score<=15&&score>10)||(r[0]==='5–10'&&score<=10&&score>5)||(r[0]==='<5'&&score<=5)));
     return `<div class="ladder-row ${active?'active':''}"><strong>${r[0]}</strong><span>${r[1]}</span><span>${r[2]}</span></div>`;
   }).join('');
+  ['reserve-ladder','btc-reserve-ladder'].forEach(id=>{const el=document.getElementById(id); if(el)el.innerHTML=ladderHtml;});
 }
 function toggleCard(el){el.closest('.op-card').classList.toggle('open');}
 function renderOpportunities(){
@@ -799,7 +777,7 @@ function renderOpportunities(){
           <div class="detail-box"><div class="detail-label">WHY IS IT DOWN?</div><div class="detail-text">${item.reason}. Confirm live news before acting; this V2 prototype uses placeholder news logic until a live news API is added.</div></div>
           <div class="detail-box"><div class="detail-label">THESIS INTEGRITY</div><div class="detail-text">${item.thesis}/100 · ${item.thesis>=80?'Thesis appears intact.':item.thesis>=60?'Some risk; monitor before sizing up.':'Potential impairment; avoid or keep small.'}</div></div>
           <div class="detail-box"><div class="detail-label">CONFIDENCE</div><div class="detail-text">${item.confidence}/100 · Based on signal strength, price move, and news severity assumptions.</div></div>
-          <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text">Primary ranking is Opportunity Score. Secondary action is ${a.label}. For BTC/ETC, reserve capital requires BTC Score below 20 plus a 15–20% drawdown from recent high.</div></div>
+          <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text">Primary ranking is Opportunity Score. Secondary action is ${a.label}. For BTC/ETH, reserve capital requires BTC Score below 20 plus a 15–20% drawdown from recent high.</div></div>
         </div>
       </div>
     </div>`;
@@ -871,15 +849,15 @@ function renderPortfolio(){
     const value=r.qty*r.price, basis=r.qty*(r.cost||0), gl=value-basis, alloc=total?value/total*100:0;
     return `<tr><td><strong>${r.symbol}</strong></td><td>${Number(r.qty).toLocaleString()}</td><td>${r.cost?money(r.cost):'—'}</td><td>${money(r.price)}</td><td>${money(value)}</td><td>${alloc.toFixed(1)}%</td><td style="color:${gl>=0?'#1D9E75':'#E24B4A'};">${r.cost?money(gl):'—'}</td></tr>`;
   }).join('')}</tbody>`:'';
-  const btc=rows.find(r=>r.symbol==='BTC'), etc=rows.find(r=>r.symbol==='ETC');
+  const btc=rows.find(r=>r.symbol==='BTC'), etc=rows.find(r=>r.symbol==='ETH');
   const score=currentCycleScore();
   const d=deploymentForScore(score);
   let msg=[];
   if(score===null)msg.push('Load the BTC Score tab to generate cycle-aware reserve deployment guidance.');
-  else if(score>20)msg.push(`BTC Score ${score}: DCA only. Continue $${BASE_DCA.BTC} BTC / $${BASE_DCA.ETC} ETC.`);
+  else if(score>20)msg.push(`BTC Score ${score}: DCA only. Continue $${BASE_DCA.BTC} BTC / $${BASE_DCA.ETH} ETH.`);
   else msg.push(`BTC Score ${score}: ${d.zone}. If BTC is also 15–20% below recent high, suggested reserve deployment is ${money(d.amount)}.`);
   if(btc&&total){msg.push(`BTC allocation is ${((btc.qty*btc.price)/total*100).toFixed(1)}% of loaded portfolio.`);}else msg.push('BTC holding not loaded yet.');
-  if(etc&&total){msg.push(`ETC allocation is ${((etc.qty*etc.price)/total*100).toFixed(1)}% of loaded portfolio.`);}else msg.push('ETC holding not loaded yet.');
+  if(etc&&total){msg.push(`ETH allocation is ${((etc.qty*etc.price)/total*100).toFixed(1)}% of loaded portfolio.`);}else msg.push('ETH holding not loaded yet.');
   document.getElementById('portfolio-strategy').innerHTML=msg.map(m=>`<div class="metric-row"><span>${m}</span></div>`).join('');
 }
 function parseCSV(text){
