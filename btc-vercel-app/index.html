@@ -34,15 +34,26 @@ body{background:#07080f;color:#e0e0f0;font-family:'DM Mono','Courier New',monosp
 .pill{font-size:10px;padding:3px 9px;border-radius:20px;border:1px solid;}
 .src-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;}
 .src-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle;}
-.ind-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:16px;}
-.ind-card{background:#0d0e1a;border:1px solid #1e2040;border-radius:10px;padding:14px;transition:border-color 0.2s;}
+.ind-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-bottom:12px;}
+.ind-card{background:#0d0e1a;border:1px solid #1e2040;border-radius:8px;padding:9px 10px;transition:border-color 0.2s;}
 .ind-card:hover{border-color:#2a2d50;}
-.ind-src{font-size:9px;color:#2a2d50;letter-spacing:0.12em;margin-bottom:3px;}
-.ind-name{font-size:11px;color:#5a5d8a;margin-bottom:6px;}
-.ind-val{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:0.03em;transition:color 0.6s;color:#3a3d6a;}
-.ind-bar-bg{height:3px;background:#1a1c30;border-radius:2px;margin:8px 0;}
+.ind-src{font-size:8px;color:#2a2d50;letter-spacing:0.1em;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ind-name{font-size:10px;color:#5a5d8a;margin-bottom:3px;line-height:1.25;}
+.ind-val{font-family:'Bebas Neue',sans-serif;font-size:24px;line-height:0.95;letter-spacing:0.03em;transition:color 0.6s;color:#3a3d6a;}
+.ind-bar-bg{height:3px;background:#1a1c30;border-radius:2px;margin:6px 0;}
 .ind-bar-fill{height:3px;border-radius:2px;transition:width 1s ease,background 0.6s;}
-.ind-ctx{font-size:10px;color:#4a4d7a;line-height:1.6;margin-top:6px;padding-top:7px;border-top:1px solid #1a1c30;}
+.ind-ctx{font-size:9px;color:#4a4d7a;line-height:1.45;margin-top:5px;padding-top:5px;border-top:1px solid #1a1c30;}
+.collapse-card{padding:0;overflow:hidden;}
+.collapse-card summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.collapse-card summary::-webkit-details-marker{display:none;}
+.collapse-card summary::after{content:'+';font-size:15px;color:#3a3d6a;}
+.collapse-card[open] summary::after{content:'−';}
+.collapse-title{font-size:10px;letter-spacing:0.22em;color:#3a3d6a;}
+.collapse-hint{font-size:10px;color:#4a4d7a;line-height:1.4;text-align:right;}
+.collapse-body{padding:0 16px 16px;border-top:1px solid #1a1c30;}
+.deploy-summary{display:flex;align-items:center;gap:12px;min-width:0;}
+.deploy-summary-score{font-family:'Bebas Neue',sans-serif;font-size:32px;line-height:0.9;color:#3a3d6a;}
+.deploy-summary-zone{font-size:10px;color:#6a6d9a;letter-spacing:0.12em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .explain-row{margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #1a1c30;}
 .explain-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
 .explain-title{font-size:12px;color:#9a9dcc;margin-bottom:4px;}
@@ -108,6 +119,7 @@ td strong{color:#c8caee;font-weight:500;}
   <div class="tab" onclick="switchTab('cycle')">₿ BTC SCORE</div>
   <div class="tab" onclick="switchTab('opportunities')">🎯 OPPORTUNITIES</div>
   <div class="tab" onclick="switchTab('research')">🔎 RESEARCH</div>
+  <div class="tab" onclick="switchTab('watchlist')">⭐ WATCHLIST</div>
   <div class="tab" onclick="switchTab('emerging')">🚀 EMERGING LEADERS</div>
   <div class="tab" onclick="switchTab('portfolio')">📊 PORTFOLIO</div>
   <div class="tab" onclick="switchTab('memory')">🧠 MEMORY</div>
@@ -180,23 +192,33 @@ td strong{color:#c8caee;font-weight:500;}
       </div>
     </div>
 
-    <div class="card" id="score-breakdown-card">
-      <p class="section-label" style="margin-bottom:10px;">SCORE BREAKDOWN</p>
-      <div id="score-breakdown" class="explain-body">Waiting for full indicator set. Fear & Greed alone is not the BTC Cycle Score.</div>
-    </div>
+    <details class="card collapse-card" id="score-breakdown-card">
+      <summary>
+        <span class="collapse-title">SCORE BREAKDOWN</span>
+        <span class="collapse-hint">Raw values, weights, and composite math</span>
+      </summary>
+      <div class="collapse-body">
+        <div id="score-breakdown" class="explain-body">Waiting for full indicator set. Fear & Greed alone is not the BTC Cycle Score.</div>
+      </div>
+    </details>
 
     
-    <div class="card">
-      <p class="section-label">BTC / ETH DEPLOYMENT ENGINE</p>
-      <div class="score-mini">
-        <div class="score-mini-num" id="btc-deploy-score" style="color:#3a3d6a;">—</div>
-        <div>
-          <div id="btc-deploy-zone" style="font-size:12px;color:#6a6d9a;letter-spacing:0.12em;margin-bottom:4px;">LOAD BTC SCORE</div>
-          <div id="btc-deploy-note" style="font-size:11px;color:#5a5d8a;line-height:1.6;">Base DCA: $250 BTC / $50 ETH. Reserve capital only activates when BTC Score is below 20 and BTC is 15–20% below recent high.</div>
-        </div>
+    <details class="card collapse-card" id="btc-deployment-details">
+      <summary>
+        <span class="deploy-summary">
+          <span class="deploy-summary-score" id="btc-deploy-score">—</span>
+          <span>
+            <span class="collapse-title">BTC / ETH DEPLOYMENT ENGINE</span><br>
+            <span class="deploy-summary-zone" id="btc-deploy-zone">LOAD BTC SCORE</span>
+          </span>
+        </span>
+        <span class="collapse-hint">Auto-opens only below 20</span>
+      </summary>
+      <div class="collapse-body">
+        <div id="btc-deploy-note" style="font-size:11px;color:#5a5d8a;line-height:1.6;margin:12px 0;">Base DCA: $250 BTC / $50 ETH. Reserve capital only activates when BTC Score is below 20 and BTC is 15–20% below recent high.</div>
+        <div id="btc-reserve-ladder"></div>
       </div>
-      <div id="btc-reserve-ladder"></div>
-    </div>
+    </details>
 
     <div id="bg-debug-panel" style="display:none;" class="card">
       <p class="section-label" style="margin-bottom:10px;">BGEOMETRICS RAW RESPONSE DEBUG</p>
@@ -207,7 +229,22 @@ td strong{color:#c8caee;font-weight:500;}
     <div class="ind-grid" id="ind-grid"></div>
 
     <div class="card">
-      <p class="section-label" style="margin-bottom:14px;">INDICATOR GUIDE</p>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+        <div>
+          <p class="section-label" style="margin-bottom:6px;">ADVANCED CYCLE SIGNALS</p>
+          <p style="font-size:11px;color:#5a5d8a;line-height:1.6;">Confirmation layer only. These do not change the official BTC Score until their data flow is verified.</p>
+        </div>
+        <span style="font-size:10px;color:#3a3d6a;">V1: 2 live · 2 pending data</span>
+      </div>
+      <div class="ind-grid" id="advanced-cycle-grid"></div>
+    </div>
+
+    <details class="card collapse-card">
+      <summary>
+        <span class="collapse-title">INDICATOR GUIDE</span>
+        <span class="collapse-hint">What each BTC signal means</span>
+      </summary>
+      <div class="collapse-body">
       <div class="explain-row">
         <div class="explain-title">MVRV Z-Score <span class="explain-src-tag">· BGeometrics</span></div>
         <div class="explain-body">Compares Bitcoin's market cap to its "realized cap" — what every coin last sold for on-chain. Below 0 = average holder at a loss; only seen at major cycle bottoms (2015, 2018, 2022). Above 7 has marked cycle tops historically.</div>
@@ -232,7 +269,12 @@ td strong{color:#c8caee;font-weight:500;}
         <div class="explain-title">Price vs 200-Week MA <span class="explain-src-tag">· CoinGecko</span></div>
         <div class="explain-body">Bitcoin's long-term floor. Every prior cycle saw the deepest bear market low touch or dip below this level. Currently rising ~$500/week. Within 20% = historically deep value. 3–5x above = historically near peaks.</div>
       </div>
-    </div>
+      <div class="explain-row">
+        <div class="explain-title">Advanced Cycle Signals <span class="explain-src-tag">· Confirmation only</span></div>
+        <div class="explain-body">2-Year MA and Pi Cycle Top can be calculated from price history. RHODL Ratio and Reserve Risk are useful independent on-chain signals, but they stay out of the official score until a reliable data endpoint is connected.</div>
+      </div>
+      </div>
+    </details>
     <p class="footer-note">Not financial advice · On-chain data via BGeometrics proxy · Fear & Greed via Alternative.me · Price/MA via CoinGecko</p>
   </div>
 </div>
@@ -278,6 +320,39 @@ td strong{color:#c8caee;font-weight:500;}
     <p class="section-label">RESEARCH HISTORY</p>
     <div id="research-history" class="explain-body">No saved research yet.</div>
   </div>
+</div>
+
+
+<!-- ═══════════════ WATCHLIST TAB ═══════════════ -->
+<div class="tab-content" id="tab-watchlist">
+  <div class="brief-header">
+    <div>
+      <p class="section-label">WATCHLIST</p>
+      <p style="font-size:11px;color:#3a3d6a;">Best home for the next dollar · ranked by pull-the-trigger score</p>
+    </div>
+    <button class="btn" onclick="renderWatchlist()">↻ Refresh Scores</button>
+  </div>
+
+  <div class="card">
+    <p class="section-label">ADD CANDIDATE</p>
+    <div class="form-grid">
+      <input class="small-input" id="watchlist-symbol" placeholder="Ticker e.g. META, COST, RKLB" onkeydown="if(event.key==='Enter')addManualWatchlistItem()">
+      <input class="small-input" id="watchlist-notes" placeholder="Optional note: target price, thesis, why you care">
+      <button class="btn" onclick="addManualWatchlistItem()">Add to Watchlist</button>
+    </div>
+    <div class="status" id="watchlist-status"></div>
+  </div>
+
+  <div class="card">
+    <p class="section-label">SCORING MODEL</p>
+    <div class="detail-grid">
+      <div class="detail-box"><div class="detail-label">FUNDAMENTALS</div><div class="detail-text">Business quality, margin durability, balance sheet, moat, and execution.</div></div>
+      <div class="detail-box"><div class="detail-label">TIMING</div><div class="detail-text">Valuation, price pullback, live change when available, and whether the selloff looks temporary.</div></div>
+      <div class="detail-box"><div class="detail-label">CONTEXT</div><div class="detail-text">Macro/theme tailwinds, thesis integrity, confidence, and saved history from prior snapshots.</div></div>
+    </div>
+  </div>
+
+  <div id="watchlist-list"></div>
 </div>
 
 
@@ -467,7 +542,7 @@ function updateQuotaDisplay(extra=''){
   if(el)el.textContent=`${bgRemaining()} / ${BG_DAILY_LIMIT} BGeometrics calls left today${extra?` · ${extra}`:''}`;
 }
 function cacheCycle(vals,meta={}){
-  localStorage.setItem(BG_CACHE_KEY,JSON.stringify({vals,btcPrice:window._btcPrice||null,realizedProxy:window._realizedProxy||null,updatedAt:Date.now(),...meta}));
+  localStorage.setItem(BG_CACHE_KEY,JSON.stringify({vals,btcPrice:window._btcPrice||null,realizedProxy:window._realizedProxy||null,advancedCycle:window._advancedCycle||null,updatedAt:Date.now(),...meta}));
 }
 function getCycleCache(){try{return JSON.parse(localStorage.getItem(BG_CACHE_KEY)||'null');}catch(e){return null;}}
 function getBgEndpointCache(){try{return JSON.parse(localStorage.getItem(BG_ENDPOINT_CACHE_KEY)||'{}');}catch(e){return {};}}
@@ -491,7 +566,9 @@ function applyCycleCache(cache=getCycleCache()){
   if(!cache||!cache.vals)return false;
   if(cache.btcPrice)window._btcPrice=cache.btcPrice;
   if(cache.realizedProxy)window._realizedProxy=cache.realizedProxy;
+  if(cache.advancedCycle)window._advancedCycle=cache.advancedCycle;
   renderCards(cache.vals);updateGauge(cache.vals);
+  renderAdvancedCycleSignals(window._advancedCycle);
   const upd=document.getElementById('updated-display');
   if(upd)upd.textContent='Cached '+new Date(cache.updatedAt).toLocaleString();
   const pd=document.getElementById('price-display');
@@ -511,14 +588,31 @@ function currentScheduleAnchor(){
 function cacheIsFreshForWindow(cache=getCycleCache()){return !!(cache&&cache.updatedAt&&cache.updatedAt>=currentScheduleAnchor());}
 async function smartRefreshCycle(force=false){
   const cache=getCycleCache();
-  if(!force&&cacheIsFreshForWindow(cache)){applyCycleCache(cache);updateQuotaDisplay('using scheduled cache');return;}
+  if(!force&&cacheIsFreshForWindow(cache)){
+    applyCycleCache(cache);
+    if(needsFreeBtcIndicators(cache.vals)){
+      updateQuotaDisplay('using BG cache; filling free BTC metrics');
+      await refreshFreeBtcIndicators({...cache.vals},{cacheSource:'scheduled-cache-free-fill'});
+    }else{
+      updateQuotaDisplay('using scheduled cache');
+    }
+    return;
+  }
   if(bgRemaining()<BG_CALLS_PER_FULL_REFRESH){
-    if(applyCycleCache(cache)){updateQuotaDisplay('quota preserved/exhausted');return;}
+    if(applyCycleCache(cache)){
+      if(needsFreeBtcIndicators(cache.vals)){
+        updateQuotaDisplay('quota preserved; filling free BTC metrics');
+        await refreshFreeBtcIndicators({...cache.vals},{cacheSource:'quota-cache-free-fill'});
+      }else{
+        updateQuotaDisplay('quota preserved/exhausted');
+      }
+      return;
+    }
     document.getElementById('status-msg').textContent='Not enough BGeometrics calls left today for a full refresh.';return;
   }
   await refreshAll();
 }
-function clearCycleCache(){localStorage.removeItem(BG_CACHE_KEY);localStorage.removeItem(BG_ENDPOINT_CACHE_KEY);window._cycleScore=null;document.getElementById('score-num').textContent='—';document.getElementById('score-lbl').textContent='CACHE CLEARED';document.getElementById('updated-display').textContent='Cache cleared';renderScoreBreakdown({mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null},null);}
+function clearCycleCache(){localStorage.removeItem(BG_CACHE_KEY);localStorage.removeItem(BG_ENDPOINT_CACHE_KEY);window._cycleScore=null;window._advancedCycle=null;document.getElementById('score-num').textContent='—';document.getElementById('score-lbl').textContent='CACHE CLEARED';document.getElementById('updated-display').textContent='Cache cleared';renderScoreBreakdown({mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null},null);renderAdvancedCycleSignals();}
 function forceRefreshAll(){
   if(bgRemaining()<BG_CALLS_PER_FULL_REFRESH){alert('Not enough BGeometrics calls left today for a full refresh.');return;}
   if(confirm('Force refresh uses 3 of your 15 daily BGeometrics calls. Continue?'))smartRefreshCycle(true);
@@ -635,6 +729,7 @@ function switchTab(t){
   if(t==='cycle')smartRefreshCycle(false);
   if(t==='opportunities')loadScreener();
   if(t==='research'){loadScreener();renderResearchHistory();}
+  if(t==='watchlist'){loadScreener();renderWatchlist();}
   if(t==='emerging')loadScreener();
   if(t==='memory')renderMemorySnapshots();
 }
@@ -663,6 +758,152 @@ function renderCards(vals){
       <div class="ind-ctx">${ctx(ind.id,v)}</div>
     </div>`;
   }).join('');
+}
+
+function avgPrice(prices,days){
+  const rows=prices.slice(-days).map(p=>p[1]).filter(Number.isFinite);
+  if(!rows.length)return null;
+  return rows.reduce((a,b)=>a+b,0)/rows.length;
+}
+function advancedSignalScore(id,value){
+  if(value===null||value===undefined||isNaN(value))return null;
+  if(id==='twoYearMA')return value<0?10:value<25?25:value<75?45:value<150?65:82;
+  if(id==='piCycleTop')return value<-35?12:value<-20?28:value<-8?48:value<0?72:92;
+  return null;
+}
+function advancedSignalContext(id,value){
+  if(value===null||value===undefined||isNaN(value))return 'Data not connected yet.';
+  if(id==='twoYearMA')return value<0?'Below 2Y MA: historically deep value.':value<25?'Near 2Y MA: accumulation-friendly zone.':value<75?'Moderately above 2Y MA: normal mid-cycle range.':value<150?'Extended above 2Y MA: add with caution.':'Very extended above 2Y MA: historically late-cycle risk.';
+  if(id==='piCycleTop')return value<0?`${Math.abs(value).toFixed(1)}% below Pi Cycle Top trigger.`:'Pi Cycle Top trigger is active or very close.';
+  return '';
+}
+function buildAdvancedCycleFromPrices(prices){
+  const btcPrice=prices?.length?prices[prices.length-1][1]:null;
+  const ma2y=avgPrice(prices,730);
+  const dma111=avgPrice(prices,111);
+  const dma350=avgPrice(prices,350);
+  const twoYearPct=(Number.isFinite(btcPrice)&&Number.isFinite(ma2y)&&ma2y>0)?((btcPrice-ma2y)/ma2y)*100:null;
+  const piTopLine=(Number.isFinite(dma350)&&dma350>0)?dma350*2:null;
+  const piGap=(Number.isFinite(dma111)&&Number.isFinite(piTopLine)&&piTopLine>0)?((dma111-piTopLine)/piTopLine)*100:null;
+  return {
+    twoYearMA:{label:'2-Year MA',src:'CoinGecko',value:twoYearPct,display:fmt('ma',twoYearPct),score:advancedSignalScore('twoYearMA',twoYearPct),context:advancedSignalContext('twoYearMA',twoYearPct),detail:Number.isFinite(ma2y)?`2Y average $${Math.round(ma2y).toLocaleString()}`:'2Y average unavailable'},
+    piCycleTop:{label:'Pi Cycle Top',src:'CoinGecko',value:piGap,display:Number.isFinite(piGap)?(piGap>=0?'+':'')+piGap.toFixed(1)+'%':'—',score:advancedSignalScore('piCycleTop',piGap),context:advancedSignalContext('piCycleTop',piGap),detail:Number.isFinite(piTopLine)?`111DMA vs 2x350DMA trigger near $${Math.round(piTopLine).toLocaleString()}`:'Pi line unavailable'},
+    rhodl:{label:'RHODL Ratio',src:'Pending on-chain endpoint',value:null,display:'Pending',score:null,context:'Useful holder-age signal. Add later when a reliable endpoint is connected.',detail:'Not included in BTC Score.'},
+    reserveRisk:{label:'Reserve Risk',src:'Pending on-chain endpoint',value:null,display:'Pending',score:null,context:'Useful long-term conviction/risk signal. Add later when a reliable endpoint is connected.',detail:'Not included in BTC Score.'}
+  };
+}
+function normalizeBtcHistoryPayload(source,d){
+  let rows=[];
+  if(source==='coingecko'){
+    rows=Array.isArray(d?.prices)?d.prices:[];
+  }
+  if(source==='cryptocompare'){
+    rows=(d?.Data?.Data||[]).map(r=>[Number(r.time)*1000,Number(r.close)]).filter(r=>Number.isFinite(r[0])&&Number.isFinite(r[1]));
+  }
+  if(source==='coincap'){
+    rows=(d?.data||[]).map(r=>[Number(r.time),Number(r.priceUsd)]).filter(r=>Number.isFinite(r[0])&&Number.isFinite(r[1]));
+  }
+  return rows.filter(r=>Array.isArray(r)&&Number.isFinite(r[0])&&Number.isFinite(r[1])&&r[1]>0).sort((a,b)=>a[0]-b[0]);
+}
+function btcHistorySources(){
+  const cgProxy={source:'coingecko',url:'/api/coingecko?path=coins%2Fbitcoin%2Fmarket_chart&vs_currency=usd&days=1500&interval=daily'};
+  const cgDirect={source:'coingecko',url:'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1500&interval=daily'};
+  const cryptoCompare={source:'cryptocompare',url:'https://min-api.cryptocompare.com/data/v2/histoday?fsym=BTC&tsym=USD&limit=1500'};
+  const coinCap={source:'coincap',url:'https://api.coincap.io/v2/assets/bitcoin/history?interval=d1'};
+  return location.protocol==='file:' ? [cgDirect,cryptoCompare,coinCap] : [cgProxy,cgDirect,cryptoCompare,coinCap];
+}
+async function fetchBtcHistory(){
+  const failures=[];
+  for(const src of btcHistorySources()){
+    try{
+      const r=await fetch(src.url);
+      if(!r.ok)throw new Error(`${src.source} ${r.status}`);
+      const d=await r.json();
+      const prices=normalizeBtcHistoryPayload(src.source,d);
+      if(prices.length<365)throw new Error(`${src.source} returned only ${prices.length} daily prices`);
+      return {prices,source:src.source};
+    }catch(e){
+      failures.push(e?.message||String(e));
+    }
+  }
+  throw new Error(failures.join(' · '));
+}
+function renderAdvancedCycleSignals(data=window._advancedCycle){
+  const el=document.getElementById('advanced-cycle-grid');
+  if(!el)return;
+  const rows=data||{
+    twoYearMA:{label:'2-Year MA',src:'CoinGecko',display:'—',score:null,context:'Waiting for CoinGecko price history.',detail:'Confirmation signal only.'},
+    piCycleTop:{label:'Pi Cycle Top',src:'CoinGecko',display:'—',score:null,context:'Waiting for CoinGecko price history.',detail:'Confirmation signal only.'},
+    rhodl:{label:'RHODL Ratio',src:'Pending on-chain endpoint',display:'Pending',score:null,context:'Useful holder-age signal. Add later when a reliable endpoint is connected.',detail:'Not included in BTC Score.'},
+    reserveRisk:{label:'Reserve Risk',src:'Pending on-chain endpoint',display:'Pending',score:null,context:'Useful long-term conviction/risk signal. Add later when a reliable endpoint is connected.',detail:'Not included in BTC Score.'}
+  };
+  el.innerHTML=Object.values(rows).map(sig=>{
+    const has=sig.score!==null&&sig.score!==undefined&&!isNaN(sig.score);
+    const c=has?col(sig.score):'#3a3d6a';
+    return `<div class="ind-card">
+      <div class="ind-src"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${has?'#1D9E75':'#3a3d6a'};margin-right:5px;vertical-align:middle;"></span>${esc(sig.src)}</div>
+      <div class="ind-name">${esc(sig.label)}</div>
+      <div class="ind-val" style="color:${c};">${esc(sig.display)}</div>
+      <div class="ind-bar-bg"><div class="ind-bar-fill" style="width:${has?sig.score:50}%;background:${c};"></div></div>
+      <div class="ind-ctx">${esc(sig.context)}<br><span style="color:#3a3d6a;">${esc(sig.detail)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function needsFreeBtcIndicators(vals={}){
+  return ['rvp','ma','fg'].some(id=>vals[id]===null||vals[id]===undefined||isNaN(vals[id]));
+}
+async function refreshFreeBtcIndicators(vals,{cacheSource='free-btc-metrics'}={}){
+  const next={mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null,...vals};
+  const setStatus=(msg)=>{
+    const upd=document.getElementById('updated-display');
+    if(upd)upd.textContent=msg;
+  };
+  setStatus('Fetching free BTC metrics...');
+
+  const fng=fetch('https://api.alternative.me/fng/?limit=1')
+    .then(r=>r.json())
+    .then(d=>{
+      const fg=parseInt(d?.data?.[0]?.value);
+      if(Number.isFinite(fg))next.fg=fg;
+      Object.assign(vals,next);
+      renderCards(next);updateGauge(next);
+    })
+    .catch(()=>{});
+
+  const cg=(async()=>{
+      try{
+        const history=await fetchBtcHistory();
+        const prices=history.prices;
+        const btcPrice=prices[prices.length-1][1];
+        const maRows=prices.slice(-1400).map(p=>p[1]).filter(Number.isFinite);
+        const rpRows=prices.slice(-365).map(p=>p[1]).filter(Number.isFinite);
+        const ma200=maRows.reduce((a,b)=>a+b,0)/maRows.length;
+        const rp=rpRows.reduce((a,b)=>a+b,0)/rpRows.length;
+        if(Number.isFinite(btcPrice)&&Number.isFinite(ma200)&&ma200>0)next.ma=((btcPrice-ma200)/ma200)*100;
+        if(Number.isFinite(btcPrice)&&Number.isFinite(rp)&&rp>0)next.rvp=((btcPrice-rp)/rp)*100;
+        window._advancedCycle=buildAdvancedCycleFromPrices(prices);
+        const pd=document.getElementById('price-display');
+        if(pd&&Number.isFinite(btcPrice))pd.textContent='BTC $'+btcPrice.toLocaleString(undefined,{maximumFractionDigits:0});
+        const rd=document.getElementById('realized-display');
+        if(rd&&Number.isFinite(rp))rd.textContent='Realized proxy $'+Math.round(rp).toLocaleString();
+        window._btcPrice=Number.isFinite(btcPrice)?btcPrice:window._btcPrice;
+        window._realizedProxy=Number.isFinite(rp)?rp:window._realizedProxy;
+        Object.assign(vals,next);
+        renderCards(next);renderAdvancedCycleSignals(window._advancedCycle);updateGauge(next);
+        setStatus(`Free BTC metrics updated from ${history.source} `+new Date().toLocaleTimeString());
+      }catch(e){
+        setStatus('BTC price-history unavailable. Realized / 200W MA still need a price-history source.');
+        console.warn('[BTC Score] price-history fetch failed:', e);
+      }
+  })();
+
+  await Promise.all([fng,cg]);
+  Object.assign(vals,next);
+  renderCards(next);renderAdvancedCycleSignals(window._advancedCycle);updateGauge(next);
+  cacheCycle(next,{source:cacheSource});
+  if(Number.isFinite(next.rvp)&&Number.isFinite(next.ma))setStatus('Free BTC metrics updated '+new Date().toLocaleTimeString());
+  return next;
 }
 
 function validMetricCount(vals){
@@ -737,6 +978,7 @@ function hydrateScoreFromCachedBg(){
   cacheCycle(vals,{source:'cached-bg-debug'});
   const upd=document.getElementById('updated-display');
   if(upd)upd.textContent='Updated from BG debug cache '+new Date().toLocaleTimeString();
+  refreshFreeBtcIndicators(vals,{cacheSource:'cached-bg-debug-free-fill'}).catch(()=>{});
   return vals;
 }
 
@@ -757,7 +999,6 @@ async function refreshAll(){
     if(cached)vals[i.id]=cached.value;
   });
   renderCards(vals);
-  let btcPrice=null;
   const bgErrors=[];
   const handleBgFail=(id,ep,e)=>{
     const cached=cachedBgMetric(id,ep);
@@ -786,38 +1027,8 @@ async function refreshAll(){
   const p1=loadBgMetric('mvrvZ','mvrv-zscore');
   const p2=loadBgMetric('puell','puell-multiple');
   const p3=loadBgMetric('nupl','nupl');
-  const p4=fetch('https://api.alternative.me/fng/?limit=1').then(r=>r.json()).then(d=>{vals.fg=parseInt(d.data[0].value);renderCards(vals);updateGauge(vals);}).catch(()=>{});
-  // Route CoinGecko through Vercel proxy to avoid browser-side rate limits
-  const cgUrl='/api/coingecko?path=coins%2Fbitcoin%2Fmarket_chart&vs_currency=usd&days=1500&interval=daily';
-  const p5=fetch(cgUrl).then(r=>{
-    if(!r.ok)throw new Error('CoinGecko proxy '+r.status);
-    return r.json();
-  }).then(d=>{
-    const prices=d.prices;btcPrice=prices[prices.length-1][1];
-    const ma200=prices.slice(-1400).map(p=>p[1]).reduce((a,b)=>a+b,0)/Math.min(1400,prices.length);
-    vals.ma=((btcPrice-ma200)/ma200)*100;
-    const rp=prices.slice(-365).map(p=>p[1]).reduce((a,b)=>a+b,0)/365;
-    vals.rvp=((btcPrice-rp)/rp)*100;
-    document.getElementById('price-display').textContent='BTC $'+btcPrice.toLocaleString(undefined,{maximumFractionDigits:0});
-    document.getElementById('realized-display').textContent='Realized proxy $'+Math.round(rp).toLocaleString();
-    window._btcPrice=btcPrice;
-    window._realizedProxy=rp;
-    renderCards(vals);updateGauge(vals);
-  }).catch(e=>{
-    // Fallback: try direct CoinGecko if proxy isn't deployed yet
-    return fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1500&interval=daily').then(r=>r.json()).then(d=>{
-      const prices=d.prices;btcPrice=prices[prices.length-1][1];
-      const ma200=prices.slice(-1400).map(p=>p[1]).reduce((a,b)=>a+b,0)/Math.min(1400,prices.length);
-      vals.ma=((btcPrice-ma200)/ma200)*100;
-      const rp=prices.slice(-365).map(p=>p[1]).reduce((a,b)=>a+b,0)/365;
-      vals.rvp=((btcPrice-rp)/rp)*100;
-      document.getElementById('price-display').textContent='BTC $'+btcPrice.toLocaleString(undefined,{maximumFractionDigits:0});
-      document.getElementById('realized-display').textContent='Realized proxy $'+Math.round(rp).toLocaleString();
-      window._btcPrice=btcPrice;window._realizedProxy=rp;
-      renderCards(vals);updateGauge(vals);
-    }).catch(()=>{});
-  });
-  await Promise.all([p1,p2,p3,p4,p5]);
+  const p4=refreshFreeBtcIndicators(vals,{cacheSource:'live-free-btc-metrics'});
+  await Promise.all([p1,p2,p3,p4]);
   updateGauge(vals);
   cacheCycle(vals,{source:'live'});
   document.getElementById('updated-display').textContent='Updated '+new Date().toLocaleTimeString();
@@ -917,12 +1128,23 @@ async function loadLiveNews(){
     const r=await fetch('/api/news?ts='+Date.now());
     if(!r.ok)throw new Error('news api '+r.status);
     const d=await r.json();
+    const buckets=d.buckets||[];
     const items=(d.items||d.news||[]).slice(0,12);
-    if(!items.length)throw new Error('no items');
-    box.innerHTML=items.map(n=>`<div class="news-item">
-      <div class="news-title">${n.title||'Untitled headline'}</div>
-      <div class="news-body">${n.source?`${n.source} · `:''}${n.publishedAt||n.published||''}${n.summary?` · ${n.summary}`:''}</div>
-    </div>`).join('');
+    if(!buckets.length&&!items.length)throw new Error('no items');
+    if(buckets.length){
+      box.innerHTML=buckets.map(bucket=>`<div class="news-item">
+        <div class="news-tag" style="color:#378ADD;border-color:#234d7a;">${bucket.name}</div>
+        ${(bucket.items||[]).map(n=>`<div style="margin:8px 0 12px;">
+          <div class="news-title">${n.bigNews?'BIG · ':''}${n.title||'Untitled headline'}</div>
+          <div class="news-body">${n.source?`${n.source} · `:''}${n.published||''}${Number.isFinite(n.ageHours)?` · ${n.ageHours.toFixed(1)}h old`:''}${n.ticker?` · ${n.ticker}`:''}${n.theme?` · ${n.theme}`:''}<br>${n.why||''}</div>
+        </div>`).join('')}
+      </div>`).join('');
+    }else{
+      box.innerHTML=items.map(n=>`<div class="news-item">
+        <div class="news-title">${n.title||'Untitled headline'}</div>
+        <div class="news-body">${n.source?`${n.source} · `:''}${n.publishedAt||n.published||''}${n.summary?` · ${n.summary}`:''}</div>
+      </div>`).join('');
+    }
   }catch(e){
     box.innerHTML=`<div class="news-item">
       <div class="news-title">Live news route unavailable</div>
@@ -968,6 +1190,7 @@ const EMERGING_LEADERS=[
 
 const RESEARCH_HISTORY_KEY='trevor_research_history_v1';
 const MEMORY_SNAPSHOTS_KEY='trevor_memory_snapshots_v1';
+const WATCHLIST_STORAGE_KEY='trevor_watchlist_v1';
 const RESEARCH_PROFILES={
   META:{name:'Meta Platforms',type:'Quality compounder',fundamental:90,thesis:86,valuation:68,macro:72,opportunity:70,summary:'Scaled ad network plus AI-enabled engagement and efficiency. Best when regulatory or reputation fear creates a valuation reset without breaking the core ad engine.',bull:'AI improves ad targeting, Reels monetization continues, WhatsApp and business messaging become larger profit pools, and Reality Labs losses stay contained.',bear:'Regulation, platform fatigue, capex intensity, or a failed metaverse/AI spending cycle could compress margins and multiple.',valuation:'Usually worth owning only with discipline. Strong business quality can justify a premium, but the best entries come after fear-driven drawdowns.',macro:'Sensitive to consumer ads, regulation, AI capex, and broad risk appetite.',risks:'Regulatory shocks, privacy changes, AI infrastructure spend, management capital allocation.'},
   COST:{name:'Costco',type:'Defensive compounder',fundamental:92,thesis:88,valuation:45,macro:78,opportunity:54,summary:'Exceptional membership model and customer loyalty. Usually a great business, but the stock often prices in that greatness.',bull:'Membership fee increases, traffic resilience, private label strength, and international growth keep compounding earnings.',bear:'Valuation can do most of the damage. If growth slows, even a wonderful business can underperform from a high multiple.',valuation:'Quality is obvious, so margin of safety is usually thin. Prefer adding on rare multiple compression.',macro:'Defensive in weak consumer environments, but not immune to wage, freight, or valuation pressure.',risks:'Premium valuation, slower same-store sales, margin pressure, limited surprise factor.'},
@@ -1019,6 +1242,8 @@ function opportunityScore(item){
 function renderReserveLadder(){
   const score=currentCycleScore();
   const d=deploymentForScore(score);
+  const deployDetails=document.getElementById('btc-deployment-details');
+  if(deployDetails)deployDetails.open=score!==null&&score<20;
   const rows=[
     ['>20','DCA only','$0'],['15–20','First allocation','$30,000'],['10–15','Aggressive allocation','$60,000'],['5–10','Major allocation','$90,000'],['<5','Maximum opportunity','$120,000']
   ];
@@ -1077,6 +1302,10 @@ function renderOpportunities(){
           <div class="detail-box"><div class="detail-label">CONFIDENCE</div><div class="detail-text">${item.confidence}/100 · Based on signal strength, price move, and news severity assumptions.</div></div>
           <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text">Primary ranking is Opportunity Score. Secondary action is ${a.label}. For BTC/ETH, reserve capital requires BTC Score below 20 plus a 15–20% drawdown from recent high.</div></div>
         </div>
+        <div class="research-actions">
+          <button class="btn" onclick="event.stopPropagation();addOpportunityToWatchlist('${item.ticker}')">Add to Watchlist</button>
+          <button class="btn" onclick="event.stopPropagation();document.getElementById('research-symbol').value='${item.ticker}';switchTab('research');runResearch();">Research</button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -1120,6 +1349,10 @@ function renderEmergingLeaders(){
           <div class="detail-box"><div class="detail-label">SENTIMENT CHECK</div><div class="detail-text">Retail sentiment ${item.retail}/100. ${retailNote} Institutional signal ${item.institutional}/100.</div></div>
           <div class="detail-box"><div class="detail-label">WHAT COULD BREAK IT</div><div class="detail-text">${item.risk}</div></div>
         </div>
+        <div class="research-actions">
+          <button class="btn" onclick="event.stopPropagation();addEmergingToWatchlist('${item.ticker}')">Add to Watchlist</button>
+          <button class="btn" onclick="event.stopPropagation();document.getElementById('research-symbol').value='${item.ticker}';switchTab('research');runResearch();">Research</button>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -1129,6 +1362,143 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function clamp(n,min=0,max=100){return Math.max(min,Math.min(max,Number(n)||0));}
 function researchHistory(){try{return JSON.parse(localStorage.getItem(RESEARCH_HISTORY_KEY)||'[]');}catch(e){return [];}}
 function saveResearchHistory(rows){localStorage.setItem(RESEARCH_HISTORY_KEY,JSON.stringify(rows.slice(0,25)));renderResearchHistory();}
+function userWatchlist(){try{return JSON.parse(localStorage.getItem(WATCHLIST_STORAGE_KEY)||'[]');}catch(e){return [];}}
+function saveUserWatchlist(rows){localStorage.setItem(WATCHLIST_STORAGE_KEY,JSON.stringify(rows.slice(0,100)));renderWatchlist();}
+function watchlistSeedFor(ticker){
+  const sym=String(ticker||'').trim().toUpperCase();
+  const opp=WATCHLIST.find(x=>x.ticker===sym);
+  if(opp)return {ticker:sym,name:opp.name,source:'Opportunities',category:opp.category,theme:themeFor(sym),notes:opp.reason};
+  const emerging=EMERGING_LEADERS.find(x=>x.ticker===sym);
+  if(emerging)return {ticker:sym,name:emerging.name,source:'Emerging Leaders',category:'Emerging leader',theme:emerging.theme,notes:emerging.entry};
+  const profile=RESEARCH_PROFILES[sym];
+  if(profile)return {ticker:sym,name:profile.name,source:'Research',category:profile.type,theme:themeFor(sym),notes:profile.summary};
+  return {ticker:sym,name:sym,source:'Manual',category:'Unclassified ticker',theme:themeFor(sym),notes:''};
+}
+function upsertWatchlistItem(item){
+  const sym=String(item?.ticker||'').trim().toUpperCase();
+  if(!sym)return null;
+  const seed=watchlistSeedFor(sym);
+  const rows=userWatchlist();
+  const existing=rows.find(r=>r.ticker===sym);
+  const next={...seed,...existing,...item,ticker:sym,name:item.name||existing?.name||seed.name,addedAt:existing?.addedAt||new Date().toISOString(),updatedAt:new Date().toISOString()};
+  const merged=[next,...rows.filter(r=>r.ticker!==sym)];
+  saveUserWatchlist(merged);
+  const status=document.getElementById('watchlist-status');
+  if(status)status.textContent=`${sym} added to Watchlist.`;
+  return next;
+}
+function addManualWatchlistItem(){
+  const symbolEl=document.getElementById('watchlist-symbol');
+  const notesEl=document.getElementById('watchlist-notes');
+  const sym=String(symbolEl?.value||'').trim().toUpperCase();
+  if(!sym){const status=document.getElementById('watchlist-status'); if(status)status.textContent='Enter a ticker first.'; return;}
+  const seed=watchlistSeedFor(sym);
+  upsertWatchlistItem({...seed,source:'Manual',notes:notesEl?.value||seed.notes});
+  if(symbolEl)symbolEl.value='';
+  if(notesEl)notesEl.value='';
+}
+function addOpportunityToWatchlist(ticker){
+  const seed=watchlistSeedFor(ticker);
+  upsertWatchlistItem({...seed,source:'Opportunities'});
+}
+function addEmergingToWatchlist(ticker){
+  const seed=watchlistSeedFor(ticker);
+  upsertWatchlistItem({...seed,source:'Emerging Leaders'});
+}
+function removeWatchlistItem(ticker){
+  const sym=String(ticker||'').trim().toUpperCase();
+  saveUserWatchlist(userWatchlist().filter(r=>r.ticker!==sym));
+}
+function watchlistRows(){
+  const rows=userWatchlist();
+  if(rows.length)return rows;
+  return ['META','GOOGL','AMZN','MSFT','ASML','TSM','FIX','PWR','AXON'].map(t=>({...watchlistSeedFor(t),source:'Starter List',addedAt:new Date().toISOString()}));
+}
+function historyScoreFor(ticker,theme){
+  const sym=String(ticker||'').toUpperCase();
+  const snaps=memorySnapshots();
+  if(!snaps.length)return {score:50,label:'No saved history yet'};
+  let hits=0, total=0;
+  snaps.forEach(s=>{
+    (s.opportunities||[]).forEach(o=>{if(o.ticker===sym){hits+=1;total+=Number(o.score)||50;}});
+    (s.portfolio?.allocations||[]).forEach(a=>{if(a.symbol===sym){hits+=1;total+=55;}});
+    if(theme && JSON.stringify(s).toLowerCase().includes(String(theme).slice(0,18).toLowerCase())){hits+=0.5;total+=52;}
+  });
+  if(!hits)return {score:50,label:`${snaps.length} snapshots, no direct match yet`};
+  return {score:Math.round(clamp(total/hits)),label:`${hits % 1 ? hits.toFixed(1) : hits} historical match${hits===1?'':'es'}`};
+}
+function watchlistScore(item){
+  const profile=researchProfile(item.ticker);
+  const opp=WATCHLIST.find(x=>x.ticker===item.ticker);
+  const emerging=EMERGING_LEADERS.find(x=>x.ticker===item.ticker);
+  const q=window._screenerData?.[item.ticker]||null;
+  const move=q?.changePercent??liveChangeFor(item.ticker)??opp?.drop??0;
+  const price=q?.price??livePriceFor(item.ticker);
+  const valuation=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:RESEARCH_SCORE_DEFAULTS[item.ticker]?.valuation??50));
+  const macro=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:RESEARCH_SCORE_DEFAULTS[item.ticker]?.macro??emerging?.narrative??55));
+  const opportunity=clamp(opp?opportunityScore({...opp,drop:move}):profile.opportunity??(emerging?emerging.leader-8:45));
+  const quality=clamp(profile.fundamental??opp?.quality??emerging?.revenue??55);
+  const thesis=clamp(profile.thesis??opp?.thesis??emerging?.leader??50);
+  const confidence=clamp(opp?.confidence??emerging?.institutional??55);
+  const technical=move<0?clamp(55+Math.min(30,Math.abs(move)*4)):clamp(48-Math.min(18,Math.abs(move)*1.5));
+  const history=historyScoreFor(item.ticker,item.theme||profile.type);
+  const score=Math.round(clamp(
+    quality*0.19 +
+    thesis*0.18 +
+    valuation*0.15 +
+    macro*0.12 +
+    opportunity*0.19 +
+    technical*0.10 +
+    history.score*0.07
+  ));
+  const action=researchDecision(score,'new');
+  const thesisBreak=thesis<50 || quality<50;
+  const adjusted=thesisBreak?Math.min(score,49):score;
+  const adjustedAction=thesisBreak?{label:'DO NOT ADD',color:'#A32D2D',copy:'Quality or thesis score is too weak. Do more research before committing capital.'}:action;
+  return {score:adjusted,action:adjustedAction,price,move,quality,thesis,valuation,macro,opportunity,technical,history,confidence};
+}
+function renderWatchlist(){
+  const el=document.getElementById('watchlist-list');
+  if(!el)return;
+  const rows=watchlistRows().map(item=>({item,score:watchlistScore(item)})).sort((a,b)=>b.score.score-a.score.score);
+  if(!rows.length){el.innerHTML='<div class="card"><p class="section-label">WATCHLIST EMPTY</p><p style="font-size:12px;color:#5a5d8a;">Add tickers from Opportunities, Emerging Leaders, or the manual box above.</p></div>';return;}
+  el.innerHTML=rows.map(({item,score})=>{
+    const price=score.price?`$${Number(score.price).toLocaleString(undefined,{maximumFractionDigits:2})}`:'Price unavailable';
+    const move=score.move!=null?`${score.move>=0?'+':''}${Number(score.move).toFixed(1)}%`:'move unavailable';
+    const added=item.addedAt?new Date(item.addedAt).toLocaleDateString():'starter';
+    const stored=userWatchlist().some(r=>r.ticker===item.ticker);
+    const scores=[
+      ['Fundamentals',score.quality],['Thesis',score.thesis],['Valuation',score.valuation],
+      ['Macro',score.macro],['Technical',score.technical],['History',score.history.score]
+    ].map(([label,val])=>`<div class="research-score"><div class="detail-label">${label.toUpperCase()}</div><div class="research-score-num" style="color:${col(val)};">${Math.round(val)}</div></div>`).join('');
+    return `<div class="op-card">
+      <div class="op-head" onclick="toggleCard(this)">
+        <div>
+          <div class="op-ticker">${esc(item.ticker)} <span style="font-size:10px;color:#3a3d6a;">${esc(item.name)}</span></div>
+          <div class="op-sub">${esc(item.category||'Watchlist')} · ${price} · ${move} · ${esc(item.source||'Manual')}</div>
+        </div>
+        <div>
+          <div class="op-score" style="color:${score.action.color};">${score.score}</div>
+          <div class="op-label" style="color:${score.action.color};">${score.action.label}</div>
+        </div>
+      </div>
+      <div class="op-details">
+        <div class="research-score-grid">${scores}</div>
+        <div class="detail-grid">
+          <div class="detail-box"><div class="detail-label">PULL-TRIGGER READ</div><div class="detail-text">${esc(score.action.copy)} Opportunity score ${score.opportunity}/100 · confidence ${score.confidence}/100.</div></div>
+          <div class="detail-box"><div class="detail-label">WHY IT'S HERE</div><div class="detail-text">${esc(item.notes||'No note yet.')}</div></div>
+          <div class="detail-box"><div class="detail-label">THEME / MACRO</div><div class="detail-text">${esc(item.theme||themeFor(item.ticker))}</div></div>
+          <div class="detail-box"><div class="detail-label">HISTORY SIGNAL</div><div class="detail-text">${esc(score.history.label)}. Saved snapshots make this smarter over time.</div></div>
+          <div class="detail-box"><div class="detail-label">TRACKING</div><div class="detail-text">Added ${esc(added)}. ${stored?'Saved in browser watchlist.':'Starter candidate; add it to save permanently.'}</div></div>
+        </div>
+        <div class="research-actions">
+          <button class="btn" onclick="event.stopPropagation();document.getElementById('research-symbol').value='${esc(item.ticker)}';switchTab('research');runResearch();">Research</button>
+          ${stored?`<button class="btn" onclick="event.stopPropagation();removeWatchlistItem('${esc(item.ticker)}')">Remove</button>`:`<button class="btn" onclick="event.stopPropagation();upsertWatchlistItem(watchlistSeedFor('${esc(item.ticker)}'))">Save to Watchlist</button>`}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
 function researchProfile(symbol){
   const sym=String(symbol||'').trim().toUpperCase();
   const watch=WATCHLIST.find(x=>x.ticker===sym);
@@ -1633,6 +2003,7 @@ async function loadScreener(){
     if(statusEl)statusEl.textContent='Prices updated '+new Date(d.updatedAt).toLocaleTimeString();
     renderOpportunities();
     renderEmergingLeaders();
+    renderWatchlist();
   }catch(e){
     if(statusEl)statusEl.textContent='Live prices unavailable — using manual estimates';
   }finally{
@@ -1659,8 +2030,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   try{document.getElementById('brief-date').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});}catch(e){}
   try{updateQuotaDisplay('smart cache active: 8 AM / 8 PM PT');}catch(e){}
   try{applyCycleCache();}catch(e){}
+  try{renderAdvancedCycleSignals();}catch(e){}
   try{renderOpportunities();}catch(e){}
   try{renderResearchHistory();}catch(e){}
+  try{renderWatchlist();}catch(e){}
   try{renderEmergingLeaders();}catch(e){}
   try{renderPortfolio();}catch(e){}
   try{renderMemorySnapshots();}catch(e){}
