@@ -101,7 +101,6 @@ td strong{color:#c8caee;font-weight:500;}
   <div class="tab active" onclick="switchTab('brief')">📰 DAILY BRIEF</div>
   <div class="tab" onclick="switchTab('cycle')">₿ BTC SCORE</div>
   <div class="tab" onclick="switchTab('opportunities')">🎯 OPPORTUNITIES</div>
-  <div class="tab" onclick="switchTab('emerging')">🚀 EMERGING LEADERS</div>
   <div class="tab" onclick="switchTab('portfolio')">📊 PORTFOLIO</div>
 </div>
 
@@ -140,7 +139,6 @@ td strong{color:#c8caee;font-weight:500;}
         <span style="font-size:11px;color:#2a2d50;" id="calls-display"></span>
         <span style="font-size:11px;color:#2a2d50;" id="updated-display"></span>
         <button class="btn" onclick="forceRefreshAll()">↻ Force Refresh</button>
-        <button class="btn" onclick="clearCycleCache()">Clear Cache</button>
         <button class="btn" onclick="startFetch()">Use proxy</button>
       </div>
     </div>
@@ -169,11 +167,6 @@ td strong{color:#c8caee;font-weight:500;}
           <p style="font-size:10px;color:#2a2d50;margin-top:8px;line-height:1.6;">Lower = historically better buy zone. On-chain data updates daily — 1–2 refreshes/day is sufficient.</p>
         </div>
       </div>
-    </div>
-
-    <div class="card" id="score-breakdown-card">
-      <p class="section-label" style="margin-bottom:10px;">SCORE BREAKDOWN</p>
-      <div id="score-breakdown" class="explain-body">Waiting for full indicator set. Fear & Greed alone is not the BTC Cycle Score.</div>
     </div>
 
     <div class="ind-grid" id="ind-grid"></div>
@@ -239,30 +232,6 @@ td strong{color:#c8caee;font-weight:500;}
     <p class="section-label">FEATURE DECISIONS</p>
     <div id="feature-decisions"></div>
   </div>
-</div>
-
-
-<!-- ═══════════════ EMERGING LEADERS TAB ═══════════════ -->
-<div class="tab-content" id="tab-emerging">
-  <div class="brief-header">
-    <div>
-      <p class="section-label">EMERGING LEADERS</p>
-      <p style="font-size:11px;color:#3a3d6a;">Find companies/themes gaining strength before they become obvious. This is separate from dip-buy Opportunities.</p>
-    </div>
-    <button class="btn" onclick="renderEmergingLeaders()">↻ Refresh Leaders</button>
-  </div>
-
-  <div class="card">
-    <p class="section-label">WHAT THIS SCANS FOR</p>
-    <div class="detail-grid">
-      <div class="detail-box"><div class="detail-label">REVENUE ACCELERATION</div><div class="detail-text">Growth rate is improving quarter over quarter, not merely staying high.</div></div>
-      <div class="detail-box"><div class="detail-label">GUIDANCE REVISIONS</div><div class="detail-text">Management and analysts keep raising expectations instead of cutting them.</div></div>
-      <div class="detail-box"><div class="detail-label">NARRATIVE STRENGTH</div><div class="detail-text">The company is becoming central to a durable theme like AI infrastructure, power, semiconductors, crypto rails, or defense autonomy.</div></div>
-      <div class="detail-box"><div class="detail-label">INSTITUTIONAL SIGNALS</div><div class="detail-text">Analyst upgrades, fund ownership, insider buying, and higher-quality capital interest. Retail sentiment is treated as secondary and often contrarian.</div></div>
-    </div>
-  </div>
-
-  <div id="emerging-list"></div>
 </div>
 
 <!-- ═══════════════ PORTFOLIO TAB ═══════════════ -->
@@ -362,7 +331,6 @@ async function smartRefreshCycle(force=false){
   }
   await refreshAll();
 }
-function clearCycleCache(){localStorage.removeItem(BG_CACHE_KEY);window._cycleScore=null;document.getElementById('score-num').textContent='—';document.getElementById('score-lbl').textContent='CACHE CLEARED';document.getElementById('updated-display').textContent='Cache cleared';renderScoreBreakdown({mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null},null);}
 function forceRefreshAll(){
   if(bgRemaining()<BG_CALLS_PER_FULL_REFRESH){alert('Not enough BGeometrics calls left today for a full refresh.');return;}
   if(confirm('Force refresh uses 3 of your 15 daily BGeometrics calls. Continue?'))smartRefreshCycle(true);
@@ -448,52 +416,11 @@ function renderCards(vals){
   }).join('');
 }
 
-function validMetricCount(vals){
-  return INDS.filter(i=>{const v=vals[i.id];return v!==null&&!isNaN(v);}).length;
-}
-function bgMetricCount(vals){
-  return ['mvrvZ','puell','nupl'].filter(id=>{const v=vals[id];return v!==null&&!isNaN(v);}).length;
-}
-function compositeScore(vals){
-  let tot=0,ws=0;
-  INDS.forEach(i=>{
-    const v=vals[i.id];
-    if(v!==null&&!isNaN(v)){tot+=sc(i.id,v)*i.w;ws+=i.w;}
-  });
-  if(!ws)return null;
-  return Math.round(tot/ws);
-}
-function renderScoreBreakdown(vals,comp=null){
-  const el=document.getElementById('score-breakdown');
-  if(!el)return;
-  const rows=INDS.map(i=>{
-    const v=vals[i.id];
-    const has=v!==null&&!isNaN(v);
-    const score=has?sc(i.id,v):null;
-    const contribution=has?(score*i.w).toFixed(2):'—';
-    return `<tr><td>${i.label}</td><td>${fmt(i.id,v)}</td><td>${has?score:'—'}</td><td>${Math.round(i.w*100)}%</td><td>${contribution}</td></tr>`;
-  }).join('');
-  const fg=vals.fg;
-  const warning=(validMetricCount(vals)<4||bgMetricCount(vals)<2)
-    ? `<p style="font-size:11px;color:#BA7517;line-height:1.6;margin-bottom:10px;">Partial data loaded. Fear & Greed ${fg!==null&&!isNaN(fg)?`is ${Math.round(fg)} / 100, but it is only one input and should not be treated as the BTC Cycle Score.`:'has not loaded yet.'}</p>`
-    : `<p style="font-size:11px;color:#5a5d8a;line-height:1.6;margin-bottom:10px;">BTC Cycle Score is the weighted composite of all loaded indicators. Fear & Greed is displayed separately below.</p>`;
-  el.innerHTML=`${warning}<div class="table-wrap"><table><thead><tr><th>Indicator</th><th>Raw value</th><th>Indicator score</th><th>Weight</th><th>Weighted pts</th></tr></thead><tbody>${rows}</tbody></table></div><p style="font-size:10px;color:#3a3d6a;margin-top:8px;">Composite shown: ${comp===null?'not enough data yet':comp+' / 100'} · valid metrics: ${validMetricCount(vals)} / ${INDS.length} · BGeometrics metrics: ${bgMetricCount(vals)} / 3</p>`;
-}
 function updateGauge(vals){
-  renderScoreBreakdown(vals,null);
-  const enoughData=validMetricCount(vals)>=4 && bgMetricCount(vals)>=2;
-  if(!enoughData){
-    const el=document.getElementById('score-num');
-    if(el){el.textContent='—';el.style.color='#3a3d6a';}
-    const lbl=document.getElementById('score-lbl');
-    if(lbl){lbl.textContent='WAITING FOR COMPOSITE DATA';lbl.style.color='#3a3d6a';}
-    const needle=document.getElementById('needle');
-    if(needle){needle.style.left='50%';needle.style.background='#3a3d6a';}
-    window._cycleScore=null;
-    return;
-  }
-  const comp=compositeScore(vals),c=col(comp);
-  renderScoreBreakdown(vals,comp);
+  let tot=0,ws=0;
+  INDS.forEach(i=>{const v=vals[i.id];if(v!==null&&!isNaN(v)){tot+=sc(i.id,v)*i.w;ws+=i.w;}});
+  if(!ws)return;
+  const comp=Math.round(tot/ws),c=col(comp);
   const el=document.getElementById('score-num');
   const cur=parseInt(el.textContent)||50;
   let f=0;
@@ -503,7 +430,7 @@ function updateGauge(vals){
   document.getElementById('score-lbl').style.color=c;
   document.getElementById('needle').style.left=comp+'%';
   document.getElementById('needle').style.background=c;
-  window._cycleScore={score:comp,color:c,label:zlbl(comp),inputs:vals}; try{renderOpportunities();renderPortfolio();}catch(e){}
+  window._cycleScore={score:comp,color:c,label:zlbl(comp)}; try{renderOpportunities();renderPortfolio();}catch(e){}
 }
 
 async function refreshAll(){
@@ -528,7 +455,6 @@ async function refreshAll(){
     renderCards(vals);updateGauge(vals);
   }).catch(()=>{});
   await Promise.all([p1,p2,p3,p4,p5]);
-  updateGauge(vals);
   cacheCycle(vals,{source:'live'});
   document.getElementById('updated-display').textContent='Updated '+new Date().toLocaleTimeString();
   updateQuotaDisplay('next scheduled refresh: 8 AM / 8 PM PT');
@@ -675,17 +601,6 @@ const WATCHLIST=[
   {ticker:'COIN',name:'Coinbase',type:'stock',drop:-8.4,reason:'Crypto sentiment and BTC-linked equity pressure',thesis:78,confidence:66,quality:74,newsSeverity:50},
   {ticker:'MSTR',name:'MicroStrategy',type:'stock',drop:-9.8,reason:'BTC beta and treasury-premium compression',thesis:64,confidence:55,quality:58,newsSeverity:56}
 ];
-const EMERGING_LEADERS=[
-  {ticker:'NVDA',name:'NVIDIA',theme:'AI compute / accelerated data center',leader:94,revenue:95,guidance:90,narrative:98,institutional:88,retail:72,entry:'Watch for pullbacks tied to export headlines or valuation resets, not AI demand impairment.',risk:'Custom silicon competition, China restrictions, AI capex digestion.'},
-  {ticker:'AVGO',name:'Broadcom',theme:'AI networking / custom silicon',leader:89,revenue:84,guidance:86,narrative:92,institutional:88,retail:55,entry:'Attractive on earnings overreaction or broad semiconductor selloff if AI networking thesis remains intact.',risk:'Valuation, customer concentration, integration risk.'},
-  {ticker:'ANET',name:'Arista Networks',theme:'AI data center networking',leader:86,revenue:82,guidance:84,narrative:91,institutional:82,retail:48,entry:'Look for 5–10% drops on margin or capex fears where cloud networking demand remains strong.',risk:'Cloud capex cycles, hyperscaler concentration.'},
-  {ticker:'VRT',name:'Vertiv',theme:'Data center power and cooling',leader:87,revenue:88,guidance:86,narrative:93,institutional:80,retail:62,entry:'Prefer pullbacks caused by valuation or temporary margin worries; theme remains tied to AI data center buildout.',risk:'Execution, cyclicality, stretched expectations.'},
-  {ticker:'CEG',name:'Constellation Energy',theme:'Nuclear / AI power demand',leader:84,revenue:70,guidance:78,narrative:94,institutional:83,retail:50,entry:'Best watched on regulatory or power-price fear, not if nuclear thesis or contracts deteriorate.',risk:'Regulatory risk, power pricing, political risk.'},
-  {ticker:'PLTR',name:'Palantir',theme:'AI operating systems / defense + enterprise',leader:81,revenue:78,guidance:86,narrative:90,institutional:70,retail:84,entry:'Retail enthusiasm is high, so require a deeper valuation reset or evidence of sustained acceleration.',risk:'Valuation, retail crowding, growth expectations.'},
-  {ticker:'COIN',name:'Coinbase',theme:'Crypto rails / institutional adoption',leader:76,revenue:74,guidance:68,narrative:82,institutional:65,retail:75,entry:'Consider when crypto panic drives the stock down but regulatory/business thesis remains intact.',risk:'Crypto cycle beta, regulation, fee compression.'},
-  {ticker:'RKLB',name:'Rocket Lab',theme:'Space infrastructure',leader:70,revenue:76,guidance:70,narrative:78,institutional:58,retail:80,entry:'Speculative leader candidate. Smaller sizing; require execution progress and avoid pure hype entries.',risk:'Unprofitability, launch risk, high retail enthusiasm.'}
-];
-
 const FEATURES=[
   {name:'Opportunity Feed',status:'YES',body:'Ranks BTC, ETC, and watchlist stocks by Opportunity Score. Surfaces only useful buy/watch/avoid candidates rather than ticker noise.',data:'Live price, 24h/7d change, confirmed news trigger, cycle score, watchlist fundamentals.',difficulty:'Medium'},
   {name:'Why Is It Down?',status:'YES',body:'Expandable explanation of the bad news, how much the asset is down, and whether the drop appears temporary or thesis-breaking.',data:'News feed + price move + confidence tagging.',difficulty:'Medium'},
@@ -772,42 +687,6 @@ function renderFeatureDecisions(){
   </div>`).join('');
 }
 
-function emergingAction(item){
-  if(item.leader>=88 && item.retail<80)return {label:'CORE WATCH',color:'#1D9E75'};
-  if(item.leader>=80)return {label:'WATCH CLOSELY',color:'#639922'};
-  if(item.leader>=70)return {label:'SPECULATIVE WATCH',color:'#BA7517'};
-  return {label:'TOO EARLY',color:'#E24B4A'};
-}
-function renderEmergingLeaders(){
-  const rows=[...EMERGING_LEADERS].sort((a,b)=>b.leader-a.leader);
-  const el=document.getElementById('emerging-list');
-  if(!el)return;
-  el.innerHTML=rows.map(item=>{
-    const a=emergingAction(item);
-    const retailNote=item.retail>=80?'Retail sentiment is hot; require better entry discipline.':item.retail<=45?'Retail attention is low; could be early if fundamentals are improving.':'Retail sentiment is present but not overheated.';
-    return `<div class="op-card">
-      <div class="op-head" onclick="toggleCard(this)">
-        <div>
-          <div class="op-ticker">${item.ticker} <span style="font-size:10px;color:#3a3d6a;">${item.name}</span></div>
-          <div class="op-sub">${item.theme}</div>
-        </div>
-        <div>
-          <div class="op-score" style="color:${a.color};">${item.leader}</div>
-          <div class="op-label" style="color:${a.color};">${a.label}</div>
-        </div>
-      </div>
-      <div class="op-details">
-        <div class="detail-grid">
-          <div class="detail-box"><div class="detail-label">WHY IT'S EMERGING</div><div class="detail-text">Narrative strength ${item.narrative}/100 · Revenue acceleration ${item.revenue}/100 · Guidance/estimate revision signal ${item.guidance}/100.</div></div>
-          <div class="detail-box"><div class="detail-label">ENTRY STRATEGY</div><div class="detail-text">${item.entry}</div></div>
-          <div class="detail-box"><div class="detail-label">SENTIMENT CHECK</div><div class="detail-text">Retail sentiment ${item.retail}/100. ${retailNote} Institutional signal ${item.institutional}/100.</div></div>
-          <div class="detail-box"><div class="detail-label">WHAT COULD BREAK IT</div><div class="detail-text">${item.risk}</div></div>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
 function portfolio(){try{return JSON.parse(localStorage.getItem('portfolioHoldings')||'[]');}catch(e){return [];}}
 function savePortfolio(rows){localStorage.setItem('portfolioHoldings',JSON.stringify(rows));renderPortfolio();}
 function addHolding(){
@@ -888,7 +767,6 @@ window.addEventListener('DOMContentLoaded',()=>{
   try{updateQuotaDisplay('smart cache active: 8 AM / 8 PM PT');}catch(e){}
   try{applyCycleCache();}catch(e){}
   try{renderOpportunities();}catch(e){}
-  try{renderEmergingLeaders();}catch(e){}
   try{renderPortfolio();}catch(e){}
   try{loadBrief();}catch(e){
     const loading=document.getElementById('brief-loading');
