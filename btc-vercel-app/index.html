@@ -333,6 +333,7 @@ const S={key:'',calls:0};
 const BG_DAILY_LIMIT=15;
 const BG_CALLS_PER_FULL_REFRESH=3;
 const BG_CACHE_KEY='trevor_btc_cycle_cache_v3';
+const BG_ENDPOINT_CACHE_KEY='trevor_bgeometrics_endpoint_cache_v1';
 const BG_USAGE_KEY='trevor_bgeometrics_usage_v1';
 function ptParts(d=new Date()){
   const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).formatToParts(d).reduce((a,p)=>{a[p.type]=p.value;return a;},{});
@@ -354,6 +355,23 @@ function cacheCycle(vals,meta={}){
   localStorage.setItem(BG_CACHE_KEY,JSON.stringify({vals,btcPrice:window._btcPrice||null,realizedProxy:window._realizedProxy||null,updatedAt:Date.now(),...meta}));
 }
 function getCycleCache(){try{return JSON.parse(localStorage.getItem(BG_CACHE_KEY)||'null');}catch(e){return null;}}
+function getBgEndpointCache(){try{return JSON.parse(localStorage.getItem(BG_ENDPOINT_CACHE_KEY)||'{}');}catch(e){return {};}}
+function cacheBgEndpoint(endpoint,payload){
+  const cache=getBgEndpointCache();
+  cache[endpoint]={payload,updatedAt:Date.now()};
+  localStorage.setItem(BG_ENDPOINT_CACHE_KEY,JSON.stringify(cache));
+}
+function cachedBgEndpoint(endpoint){
+  const entry=getBgEndpointCache()[endpoint];
+  return entry&&entry.payload?entry:null;
+}
+function cachedBgMetric(id,endpoint){
+  const entry=cachedBgEndpoint(endpoint);
+  if(!entry)return null;
+  const val=getMetricVal(id,entry.payload);
+  return val===null?null:{value:val,updatedAt:entry.updatedAt,payload:entry.payload};
+}
+function bgCacheIsFresh(entry){return !!(entry&&entry.updatedAt&&entry.updatedAt>=currentScheduleAnchor());}
 function applyCycleCache(cache=getCycleCache()){
   if(!cache||!cache.vals)return false;
   if(cache.btcPrice)window._btcPrice=cache.btcPrice;
@@ -385,7 +403,7 @@ async function smartRefreshCycle(force=false){
   }
   await refreshAll();
 }
-function clearCycleCache(){localStorage.removeItem(BG_CACHE_KEY);window._cycleScore=null;document.getElementById('score-num').textContent='—';document.getElementById('score-lbl').textContent='CACHE CLEARED';document.getElementById('updated-display').textContent='Cache cleared';renderScoreBreakdown({mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null},null);}
+function clearCycleCache(){localStorage.removeItem(BG_CACHE_KEY);localStorage.removeItem(BG_ENDPOINT_CACHE_KEY);window._cycleScore=null;document.getElementById('score-num').textContent='—';document.getElementById('score-lbl').textContent='CACHE CLEARED';document.getElementById('updated-display').textContent='Cache cleared';renderScoreBreakdown({mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null},null);}
 function forceRefreshAll(){
   if(bgRemaining()<BG_CALLS_PER_FULL_REFRESH){alert('Not enough BGeometrics calls left today for a full refresh.');return;}
   if(confirm('Force refresh uses 3 of your 15 daily BGeometrics calls. Continue?'))smartRefreshCycle(true);
@@ -476,7 +494,8 @@ function numericFromRow(row, preferredKeys=[]){
 function getMetricVal(id, payload){
   const rows = flattenMetricRows(payload);
   if(!rows.length) return null;
-  const row = rows[rows.length-1];
+  const datedRows = rows.filter(r=>r&&typeof r==='object').map(r=>({...r,__ts:Date.parse(r.d||r.date||r.time||r.timestamp)||Number(r.unixTs||r.unixts||r.unix||0)*1000||0}));
+  const row = datedRows.length ? datedRows.sort((a,b)=>a.__ts-b.__ts)[datedRows.length-1] : rows[rows.length-1];
   const preferred = {
     mvrvZ:['mvrvzscore','mvrv_zscore','mvrv_z_score','mvrv_z','mvrvz','zscore','z_score','value','v'],
     puell:['puellmultiple','puell_multiple','puell','multiple','value','v'],
@@ -505,13 +524,15 @@ function switchTab(t){
 
 async function bgCall(ep){
   const r=await fetch(`/api/bgeometrics?endpoint=${encodeURIComponent(ep)}`);
+  if(r.status!==404)addBgUsage(1);
   if(!r.ok){
-    let msg='BG proxy '+r.status;
-    try{const d=await r.json(); if(d && d.error) msg=d.error;}catch(e){}
-    throw new Error(msg);
+    let msg='BG proxy '+r.status, details=null;
+    try{const d=await r.json(); details=d; if(d?.details?.error?.message)msg=d.details.error.message; else if(d?.error) msg=d.error;}catch(e){}
+    const err=new Error(msg);err.status=r.status;err.details=details;throw err;
   }
-  addBgUsage(1);
-  return r.json();
+  const data=await r.json();
+  cacheBgEndpoint(ep,data);
+  return data;
 }
 
 function renderCards(vals){
@@ -553,8 +574,10 @@ function renderScoreBreakdown(vals,comp=null){
     return `<tr><td>${i.label}</td><td>${fmt(i.id,v)}</td><td>${has?score:'—'}</td><td>${Math.round(i.w*100)}%</td><td>${contribution}</td></tr>`;
   }).join('');
   const fg=vals.fg;
-  const warning=(validMetricCount(vals)<4||bgMetricCount(vals)<2)
-    ? `<p style="font-size:11px;color:#BA7517;line-height:1.6;margin-bottom:10px;">Partial data loaded. Fear & Greed ${fg!==null&&!isNaN(fg)?`is ${Math.round(fg)} / 100, but it is only one input and should not be treated as the BTC Cycle Score.`:'has not loaded yet.'}</p>`
+  const bgLoaded=bgMetricCount(vals);
+  const metricLoaded=validMetricCount(vals);
+  const warning=(metricLoaded<4||bgLoaded<2)
+    ? `<p style="font-size:11px;color:#BA7517;line-height:1.6;margin-bottom:10px;">Partial data loaded: ${metricLoaded} / ${INDS.length} indicators, including ${bgLoaded} / 3 BGeometrics metrics. ${fg!==null&&!isNaN(fg)?`Fear & Greed is ${Math.round(fg)} / 100, but the app will not publish a BTC Cycle Score until more on-chain data is available.`:'Fear & Greed has not loaded yet.'}</p>`
     : `<p style="font-size:11px;color:#5a5d8a;line-height:1.6;margin-bottom:10px;">BTC Cycle Score is the weighted composite of all loaded indicators. Fear & Greed is displayed separately below.</p>`;
   el.innerHTML=`${warning}<div class="table-wrap"><table><thead><tr><th>Indicator</th><th>Raw value</th><th>Indicator score</th><th>Weight</th><th>Weighted pts</th></tr></thead><tbody>${rows}</tbody></table></div><p style="font-size:10px;color:#3a3d6a;margin-top:8px;">Composite shown: ${comp===null?'not enough data yet':comp+' / 100'} · lower score = better long-term BTC accumulation zone · valid metrics: ${validMetricCount(vals)} / ${INDS.length} · BGeometrics metrics: ${bgMetricCount(vals)} / 3</p>`;
 }
@@ -597,24 +620,40 @@ async function refreshAll(){
   const statusEl=document.getElementById('status-msg');
   if(statusEl)statusEl.textContent='';
   const vals={mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null};
+  INDS.filter(i=>i.ep).forEach(i=>{
+    const cached=cachedBgMetric(i.id,i.ep);
+    if(cached)vals[i.id]=cached.value;
+  });
   renderCards(vals);
   let btcPrice=null;
   const bgErrors=[];
-  const p1=bgCall('mvrv-zscore').then(d=>{
-    vals.mvrvZ=getMetricVal('mvrvZ', d);
-    if(vals.mvrvZ===null)bgErrors.push('mvrv-zscore: value out of expected range or missing field (raw: '+JSON.stringify(d).slice(0,120)+')');
-    renderCards(vals);updateGauge(vals);
-  }).catch(e=>{bgErrors.push('mvrv-zscore failed: '+e.message);});
-  const p2=bgCall('puell-multiple').then(d=>{
-    vals.puell=getMetricVal('puell', d);
-    if(vals.puell===null)bgErrors.push('puell-multiple: value out of expected range or missing field (raw: '+JSON.stringify(d).slice(0,120)+')');
-    renderCards(vals);updateGauge(vals);
-  }).catch(e=>{bgErrors.push('puell-multiple failed: '+e.message);});
-  const p3=bgCall('nupl').then(d=>{
-    vals.nupl=getMetricVal('nupl', d);
-    if(vals.nupl===null)bgErrors.push('nupl: value out of expected range or missing field (raw: '+JSON.stringify(d).slice(0,120)+')');
-    renderCards(vals);updateGauge(vals);
-  }).catch(e=>{bgErrors.push('nupl failed: '+e.message);});
+  const handleBgFail=(id,ep,e)=>{
+    const cached=cachedBgMetric(id,ep);
+    if(cached){
+      vals[id]=cached.value;
+      bgErrors.push(`${ep} live fetch failed (${e.status||'error'}). Using cached value from ${new Date(cached.updatedAt).toLocaleString()}.`);
+      renderCards(vals);updateGauge(vals);
+    }else{
+      bgErrors.push(`${ep} failed: ${e.message}`);
+    }
+  };
+  const loadBgMetric=(id,ep)=>{
+    const fresh=cachedBgMetric(id,ep);
+    const entry=cachedBgEndpoint(ep);
+    if(fresh&&bgCacheIsFresh(entry)){
+      vals[id]=fresh.value;
+      renderCards(vals);updateGauge(vals);
+      return Promise.resolve();
+    }
+    return bgCall(ep).then(d=>{
+      vals[id]=getMetricVal(id, d);
+      if(vals[id]===null)bgErrors.push(`${ep}: value out of expected range or missing field (raw: ${JSON.stringify(d).slice(0,120)})`);
+      renderCards(vals);updateGauge(vals);
+    }).catch(e=>handleBgFail(id,ep,e));
+  };
+  const p1=loadBgMetric('mvrvZ','mvrv-zscore');
+  const p2=loadBgMetric('puell','puell-multiple');
+  const p3=loadBgMetric('nupl','nupl');
   const p4=fetch('https://api.alternative.me/fng/?limit=1').then(r=>r.json()).then(d=>{vals.fg=parseInt(d.data[0].value);renderCards(vals);updateGauge(vals);}).catch(()=>{});
   // Route CoinGecko through Vercel proxy to avoid browser-side rate limits
   const cgUrl='/api/coingecko?path=coins%2Fbitcoin%2Fmarket_chart&vs_currency=usd&days=1500&interval=daily';
@@ -1003,14 +1042,25 @@ async function showBgDebug(){
   const out=document.getElementById('bg-debug-output');
   panel.style.display='block';
   panel.scrollIntoView({behavior:'smooth'});
-  out.innerHTML='<p style="color:#5a5d8a;">Fetching 3 endpoints…</p>';
-  const eps=['mvrv-zscore','puell-multiple','nupl'];
+  out.innerHTML='<p style="color:#5a5d8a;">Checking cached responses first. Fresh calls are only made for endpoints without a current cache.</p>';
+  const eps=[
+    {ep:'mvrv-zscore',id:'mvrvZ'},
+    {ep:'puell-multiple',id:'puell'},
+    {ep:'nupl',id:'nupl'}
+  ];
   const results=[];
-  for(const ep of eps){
+  for(const {ep,id} of eps){
+    const cached=cachedBgEndpoint(ep);
+    if(bgCacheIsFresh(cached)){
+      results.push({ep,status:'cached',ok:true,body:cached.payload,cachedAt:cached.updatedAt,value:getMetricVal(id,cached.payload)});
+      continue;
+    }
     try{
       const r=await fetch(`/api/bgeometrics?endpoint=${encodeURIComponent(ep)}`);
+      if(r.status!==404)addBgUsage(1);
       const text=await r.text();
       let parsed;try{parsed=JSON.parse(text);}catch(e){parsed=text;}
+      if(r.ok)cacheBgEndpoint(ep,parsed);
       results.push({ep,status:r.status,ok:r.ok,body:parsed});
     }catch(e){
       results.push({ep,status:'network error',ok:false,body:e.message});
@@ -1019,6 +1069,7 @@ async function showBgDebug(){
   out.innerHTML=results.map(r=>`
     <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #1a1c30;">
       <div style="font-size:12px;color:${r.ok?'#1D9E75':'#E24B4A'};margin-bottom:6px;">${r.ep} — HTTP ${r.status}</div>
+      ${r.cachedAt?`<div style="font-size:10px;color:#6a6d9a;margin-bottom:6px;">Using cached response from ${new Date(r.cachedAt).toLocaleString()} · parsed value ${r.value??'—'}</div>`:''}
       <pre style="font-size:10px;color:#7a7daa;white-space:pre-wrap;word-break:break-all;line-height:1.5;background:#07080f;padding:10px;border-radius:6px;border:1px solid #1a1c30;">${JSON.stringify(r.body,null,2).slice(0,800)}</pre>
     </div>`).join('');
 }
