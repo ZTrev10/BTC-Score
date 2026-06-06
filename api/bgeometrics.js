@@ -13,8 +13,11 @@ export default async function handler(req, res) {
   const endpoint = String(req.query.endpoint || '').trim();
   if (!ALLOWED_ENDPOINTS.has(endpoint)) return res.status(400).json({ error: 'Invalid endpoint.', allowed: Array.from(ALLOWED_ENDPOINTS) });
 
+  const limit = Number.parseInt(req.query.limit || '1', 10);
+  const safeLimit = Number.isFinite(limit) && limit > 0 && limit <= 100 ? limit : 1;
+
   try {
-    const upstream = await fetch(`https://api.bgeometrics.com/v1/${endpoint}?limit=1`, {
+    const upstream = await fetch(`https://api.bgeometrics.com/v1/${endpoint}?limit=${safeLimit}`, {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' }
     });
 

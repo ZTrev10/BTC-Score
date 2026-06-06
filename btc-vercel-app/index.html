@@ -435,8 +435,14 @@ function flattenMetricRows(payload){
   if (Array.isArray(root)) return root;
   if (Array.isArray(root?.data)) return root.data;
   if (Array.isArray(root?.result)) return root.result;
+  if (Array.isArray(root?.results)) return root.results;
   if (Array.isArray(root?.values)) return root.values;
   if (Array.isArray(root?.rows)) return root.rows;
+  if (Array.isArray(root?.items)) return root.items;
+  if (Array.isArray(root?.series)) return root.series;
+  if (root?.data && typeof root.data === 'object') return flattenMetricRows(root.data);
+  if (root?.result && typeof root.result === 'object') return flattenMetricRows(root.result);
+  if (root?.latest && typeof root.latest === 'object') return [root.latest];
   if (root && typeof root === 'object') return [root];
   return [];
 }
@@ -447,6 +453,13 @@ function numericFromRow(row, preferredKeys=[]){
     const actual = lowerMap[wanted.toLowerCase()];
     if(actual !== undefined){
       const n = parseFloat(row[actual]);
+      if(Number.isFinite(n)) return n;
+    }
+  }
+  for(const k of Object.keys(row)){
+    const val=row[k];
+    if(val && typeof val === 'object'){
+      const n=numericFromRow(val, preferredKeys);
       if(Number.isFinite(n)) return n;
     }
   }
@@ -664,7 +677,8 @@ async function loadBrief(){
   let fg=null,btcP=null,ethP=null,btcChg=null,ethChg=null,ma200=null,rpProxy=null;
   try{const r=await fetch('https://api.alternative.me/fng/?limit=1');const d=await r.json();fg=parseInt(d.data[0].value);}catch(e){}
   try{
-    const r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true');
+    let r=await fetch('/api/coingecko?path=simple%2Fprice&ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true');
+    if(!r.ok)r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true');
     const d=await r.json();btcP=d.bitcoin?.usd;ethP=d['ethereum']?.usd;btcChg=d.bitcoin?.usd_24h_change;ethChg=d['ethereum']?.usd_24h_change;
   }catch(e){}
   try{
@@ -675,6 +689,7 @@ async function loadBrief(){
     ma200=prices.slice(-1400).map(p=>p[1]).reduce((a,b)=>a+b,0)/Math.min(1400,prices.length);
     rpProxy=prices.slice(-365).map(p=>p[1]).reduce((a,b)=>a+b,0)/365;
   }catch(e){}
+  try{await loadScreener();}catch(e){}
   const cs=window._cycleScore||null;
   const scoreNum=cs?cs.score:'—';
   const scoreCol=cs?cs.color:'#3a3d6a';
@@ -715,7 +730,7 @@ async function loadBrief(){
     
     <p class="footer-note">Not financial advice · Prices: CoinGecko · Sentiment: Alternative.me · News refreshes on demand</p>
   `;
-  try{const top=[...WATCHLIST].map(i=>({...i,score:opportunityScore(i)})).sort((a,b)=>b.score-a.score)[0];const act=actionFor(top.score,top.thesis,top.confidence);const d=deploymentForScore(currentCycleScore());document.getElementById('brief-opportunity-mini').innerHTML=`<div class="score-mini"><div class="score-mini-num" style="color:${act.color};">${top.score}</div><div><div style="font-size:12px;color:${act.color};letter-spacing:0.12em;margin-bottom:4px;">${top.ticker} · ${act.label}</div><div style="font-size:11px;color:#5a5d8a;line-height:1.6;">Down ${pct(top.drop)} · ${top.reason}</div><div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Reserve suggestion: ${money(d.amount)} if BTC Score and price drawdown triggers are both met.</div></div></div>`;}catch(e){}
+  try{const top=rankedOpportunities()[0];const act=actionFor(top.score,top.thesis,top.confidence);const d=deploymentForScore(currentCycleScore());document.getElementById('brief-opportunity-mini').innerHTML=`<div class="score-mini"><div class="score-mini-num" style="color:${act.color};">${top.score}</div><div><div style="font-size:12px;color:${act.color};letter-spacing:0.12em;margin-bottom:4px;">${top.ticker} · ${act.label}</div><div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${top.drop<0?'Down':'Change'} ${pct(top.drop)} · ${top.reason}</div><div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Reserve suggestion: ${money(d.amount)} if BTC Score and price drawdown triggers are both met.</div></div></div>`;}catch(e){}
   document.getElementById('brief-loading').style.display='none';
   document.getElementById('brief-content').style.display='block';
   try{loadLiveNews();}catch(e){}
@@ -814,20 +829,33 @@ function renderReserveLadder(){
   ['reserve-ladder','btc-reserve-ladder'].forEach(id=>{const el=document.getElementById(id); if(el)el.innerHTML=ladderHtml;});
 }
 function toggleCard(el){el.closest('.op-card').classList.toggle('open');}
-function renderOpportunities(){
-  renderReserveLadder();
-  const sorted=[...WATCHLIST].map(i=>{
+function rankedOpportunities(){
+  return [...WATCHLIST].map(i=>{
     const liveDrop=liveChangeFor(i.ticker);
     const livePrice=livePriceFor(i.ticker);
+    const liveNews=liveNewsFor(i.ticker);
     const drop=liveDrop!==null?liveDrop:i.drop;
-    const enriched={...i,drop,livePrice,isLive:liveDrop!==null};
+    const enriched={
+      ...i,
+      drop,
+      livePrice,
+      isLive:liveDrop!==null,
+      liveNews,
+      newsSeverity:liveNews?.severity ?? i.newsSeverity,
+      reason:liveNews?.title || i.reason
+    };
     return {...enriched,score:opportunityScore(enriched)};
   }).sort((a,b)=>b.score-a.score);
+}
+function renderOpportunities(){
+  renderReserveLadder();
+  const sorted=rankedOpportunities();
   document.getElementById('opportunity-list').innerHTML=sorted.map(item=>{
     const a=actionFor(item.score,item.thesis,item.confidence);
     const priceTag=item.livePrice?` · $${Number(item.livePrice).toLocaleString(undefined,{maximumFractionDigits:2})}`:'';
     const liveTag=item.isLive?'<span style="color:#1D9E75;font-size:9px;margin-left:6px;">● LIVE</span>':'<span style="color:#3a3d6a;font-size:9px;margin-left:6px;">est.</span>';
     const isDown=item.drop<-4.5;
+    const newsMeta=item.liveNews?`${item.liveNews.source||'News'}${item.liveNews.published?' · '+item.liveNews.published:''}`:'Placeholder context — waiting for a live down-5% news trigger.';
     return `<div class="op-card">
       <div class="op-head" onclick="toggleCard(this)">
         <div>
@@ -841,7 +869,7 @@ function renderOpportunities(){
       </div>
       <div class="op-details">
         <div class="detail-grid">
-          <div class="detail-box"><div class="detail-label">WHY IS IT DOWN?</div><div class="detail-text">${item.reason}${item.isLive?'':' (Placeholder context — live news API not yet connected.)'}</div></div>
+          <div class="detail-box"><div class="detail-label">WHY IS IT DOWN?</div><div class="detail-text">${item.reason}<br><span style="color:#6a6d9a;">${newsMeta}</span></div></div>
           <div class="detail-box"><div class="detail-label">THESIS INTEGRITY</div><div class="detail-text">${item.thesis}/100 · ${item.thesis>=80?'Thesis appears intact.':item.thesis>=60?'Some risk; monitor before sizing up.':'Potential impairment; avoid or keep small.'}</div></div>
           <div class="detail-box"><div class="detail-label">CONFIDENCE</div><div class="detail-text">${item.confidence}/100 · Based on signal strength, price move, and news severity assumptions.</div></div>
           <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text">Primary ranking is Opportunity Score. Secondary action is ${a.label}. For BTC/ETH, reserve capital requires BTC Score below 20 plus a 15–20% drawdown from recent high.</div></div>
@@ -998,6 +1026,7 @@ async function showBgDebug(){
 
 // ── Live Screener ─────────────────────────────────────────────────────────────
 window._screenerData = {}; // symbol → {price, changePercent, name, ...}
+window._opportunityNews = {}; // symbol → recent headline context
 let _screenerLoading = false;
 
 async function loadScreener(){
@@ -1010,6 +1039,7 @@ async function loadScreener(){
     if(!r.ok)throw new Error('screener '+r.status);
     const d=await r.json();
     (d.quotes||[]).forEach(q=>{ window._screenerData[q.symbol]=q; });
+    window._opportunityNews=d.newsBySymbol||{};
     if(statusEl)statusEl.textContent='Prices updated '+new Date(d.updatedAt).toLocaleTimeString();
     renderOpportunities();
     renderEmergingLeaders();
@@ -1028,6 +1058,10 @@ function liveChangeFor(ticker){
 function livePriceFor(ticker){
   const q=window._screenerData[ticker];
   return q?.price ?? null;
+}
+function liveNewsFor(ticker){
+  const items=window._opportunityNews?.[ticker]||[];
+  return items[0]||null;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 

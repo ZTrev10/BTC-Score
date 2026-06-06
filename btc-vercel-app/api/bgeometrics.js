@@ -73,8 +73,8 @@ export default async function handler(req, res) {
       data
     });
   } catch (err) {
-    return res.status(500).json({
-      error: 'Server error while fetching BGeometrics data.',
+    return res.status(502).json({
+      error: 'BGeometrics proxy request failed.',
       message: err instanceof Error ? err.message : String(err)
     });
   }
