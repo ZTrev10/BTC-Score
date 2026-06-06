@@ -266,8 +266,8 @@ td strong{color:#c8caee;font-weight:500;}
         <div class="explain-body">Realized Price = average cost basis of all Bitcoin. When spot drops below it, the average holder is at a loss. The app uses actual BGeometrics realized price when available; if not, it derives the premium from NUPL so the sign stays consistent with on-chain profit/loss.</div>
       </div>
       <div class="explain-row">
-        <div class="explain-title">Fear & Greed Index <span class="explain-src-tag">· Alternative.me</span></div>
-        <div class="explain-body">Composite sentiment (0–100) blending volatility, momentum, social media, dominance, and Google Trends. Sustained Extreme Fear below 20 has historically aligned with bottoms. Sustained Extreme Greed above 80 with tops.</div>
+        <div class="explain-title">Sentiment Overlay / Fear & Greed <span class="explain-src-tag">· Alternative.me</span></div>
+        <div class="explain-body">Composite sentiment (0–100) blending volatility, momentum, social media, dominance, and Google Trends. It is useful confirmation, but intentionally weighted below the on-chain cycle signals so daily mood does not overpower structural valuation.</div>
       </div>
       <div class="explain-row">
         <div class="explain-title">Price vs 200-Week MA <span class="explain-src-tag">· CoinGecko</span></div>
@@ -560,6 +560,7 @@ function updateQuotaDisplay(extra=''){
   if(el)el.textContent=`${bgRemaining()} / ${BG_DAILY_LIMIT} BGeometrics calls left today${extra?` · ${extra}`:''}`;
 }
 function cacheCycle(vals,meta={}){
+  vals=sanitizedCycleVals(vals);
   localStorage.setItem(BG_CACHE_KEY,JSON.stringify({vals,btcPrice:window._btcPrice||null,realizedProxy:window._realizedProxy||null,advancedCycle:window._advancedCycle||null,updatedAt:Date.now(),...meta}));
 }
 function getCycleCache(){try{return JSON.parse(localStorage.getItem(BG_CACHE_KEY)||'null');}catch(e){return null;}}
@@ -580,8 +581,20 @@ function cachedBgMetric(id,endpoint){
   return val===null?null:{value:val,updatedAt:entry.updatedAt,payload:entry.payload};
 }
 function bgCacheIsFresh(entry){return !!(entry&&entry.updatedAt&&entry.updatedAt>=currentScheduleAnchor());}
+function sanitizedCycleVals(vals={}){
+  const next={mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null,...vals};
+  const implied=rvpFromNupl(next.nupl);
+  if(Number.isFinite(implied)&&Number(next.nupl)>0.05&&Number(next.rvp)<0){
+    next.rvp=implied;
+  }
+  if(Number.isFinite(implied)&&(next.rvp===null||next.rvp===undefined||isNaN(next.rvp))){
+    next.rvp=implied;
+  }
+  return next;
+}
 function applyCycleCache(cache=getCycleCache()){
   if(!cache||!cache.vals)return false;
+  cache.vals=sanitizedCycleVals(cache.vals);
   if(cache.btcPrice)window._btcPrice=cache.btcPrice;
   if(cache.realizedProxy)window._realizedProxy=cache.realizedProxy;
   if(cache.advancedCycle)window._advancedCycle=cache.advancedCycle;
@@ -633,15 +646,15 @@ async function smartRefreshCycle(force=false){
 function clearCycleCache(){localStorage.removeItem(BG_CACHE_KEY);localStorage.removeItem(BG_ENDPOINT_CACHE_KEY);window._cycleScore=null;window._advancedCycle=null;document.getElementById('score-num').textContent='—';document.getElementById('score-lbl').textContent='CACHE CLEARED';document.getElementById('updated-display').textContent='Cache cleared';renderScoreBreakdown({mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null},null);renderAdvancedCycleSignals();}
 function forceRefreshAll(){
   if(bgRemaining()<BG_CALLS_PER_FULL_REFRESH){alert('Not enough BGeometrics calls left today for a full refresh.');return;}
-  if(confirm('Force refresh uses 3 of your 15 daily BGeometrics calls. Continue?'))smartRefreshCycle(true);
+  if(confirm(`Force refresh uses ${BG_CALLS_PER_FULL_REFRESH} of your 15 daily BGeometrics calls. Continue?`))smartRefreshCycle(true);
 }
 const INDS=[
-  {id:'mvrvZ',label:'MVRV Z-Score',     src:'BGeometrics',   sc:'#378ADD',w:0.25,ep:'mvrv-zscore'},
-  {id:'puell',label:'Puell Multiple',   src:'BGeometrics',   sc:'#378ADD',w:0.22,ep:'puell-multiple'},
+  {id:'mvrvZ',label:'MVRV Z-Score',     src:'BGeometrics',   sc:'#378ADD',w:0.22,ep:'mvrv-zscore'},
+  {id:'puell',label:'Puell Multiple',   src:'BGeometrics',   sc:'#378ADD',w:0.18,ep:'puell-multiple'},
   {id:'nupl', label:'NUPL',             src:'BGeometrics',   sc:'#378ADD',w:0.20,ep:'nupl'},
-  {id:'rvp',  label:'Price vs Realized',src:'BGeometrics',sc:'#378ADD',w:0.15},
-  {id:'fg',   label:'Fear & Greed',     src:'Alternative.me',sc:'#1D9E75',w:0.10},
-  {id:'ma',   label:'vs 200-Week MA',   src:'CoinGecko',     sc:'#1D9E75',w:0.08},
+  {id:'rvp',  label:'Price vs Realized',src:'BGeometrics',sc:'#378ADD',w:0.16},
+  {id:'fg',   label:'Sentiment Overlay', src:'Alternative.me',sc:'#1D9E75',w:0.08},
+  {id:'ma',   label:'vs 200-Week MA',   src:'CoinGecko',     sc:'#1D9E75',w:0.16},
 ];
 function sc(id,v){
   if(v===null||isNaN(v))return 50;
@@ -669,7 +682,7 @@ function ctx(id,v){
   if(id==='puell')return v<0.5?'⬇ Below 0.5 — miner capitulation, major bottoms here historically':v<0.8?'Below 1 — miners underpaid, accumulation zone':v<1.5?'Near 1 — fair revenue, neutral signal':v<3?'Above 1 — overearning, mid-to-late bull market':'⬆ Above 3 — extreme, historically preceded major corrections';
   if(id==='nupl') return v<0?'⬇ Below 0 — capitulation. Avg holder underwater. Historically strongest buy.':v<0.25?'Hope/fear — recovering from bottom, early accumulation':v<0.5?'Optimism — mid-bull, historically still significant upside':v<0.65?'Belief/thrill — late bull, scale entries with caution':'⬆ Near euphoria (0.75+) — historically very close to cycle tops';
   if(id==='rvp')  return v<0?'⬇ Price BELOW realized — avg holder at a loss. Only at true cycle bottoms.':v<20?'Just above realized — minimal avg profit, near accumulation zone':v<50?'Above realized, but still in accumulation-friendly range':v<100?'Moderate premium — mid-cycle range':v<200?'Large premium — late cycle signal':'⬆ Extreme premium — historically near cycle tops';
-  if(id==='fg')   return v<20?'⬇ Extreme Fear — historically a buying opportunity when sustained':v<40?'Fear — pessimistic market, often precedes recoveries':v<60?'Neutral — no strong directional signal':v<80?'Greed — optimistic, returns tend to moderate':'⬆ Extreme Greed — historically near-term tops when sustained';
+  if(id==='fg')   return v<20?'Sentiment Overlay: Extreme Fear — confirmation signal, not the BTC Cycle Score':v<40?'Sentiment Overlay: Fear — pessimism can support accumulation when on-chain agrees':v<60?'Sentiment Overlay: Neutral — no strong sentiment signal':v<80?'Sentiment Overlay: Greed — require better valuation confirmation':'Sentiment Overlay: Extreme Greed — near-term caution signal';
   if(id==='ma')   return v<0?'⬇ BELOW 200W MA — absolute bottom territory, has always held long-term':v<20?'Within 20% of MA — historically deep value':v<100?'Moderate above MA — normal bull market range':v<300?'Extended — late bull market elevated risk':'⬆ Far above MA — stretched, seen at prior cycle peaks (2021: +400%)';
   return'';
 }
@@ -768,6 +781,7 @@ async function bgCall(ep){
 }
 
 function renderCards(vals){
+  vals=sanitizedCycleVals(vals);
   document.getElementById('ind-grid').innerHTML=INDS.map(ind=>{
     const v=vals[ind.id],s=sc(ind.id,v),c=(v!==null&&!isNaN(v))?col(s):'#3a3d6a';
     return`<div class="ind-card">
@@ -976,11 +990,12 @@ function renderScoreBreakdown(vals,comp=null){
   const bgLoaded=bgMetricCount(vals);
   const metricLoaded=validMetricCount(vals);
   const warning=(metricLoaded<4||bgLoaded<2)
-    ? `<p style="font-size:11px;color:#BA7517;line-height:1.6;margin-bottom:10px;">Partial data loaded: ${metricLoaded} / ${INDS.length} indicators, including ${bgLoaded} / 3 BGeometrics metrics. ${fg!==null&&!isNaN(fg)?`Fear & Greed is ${Math.round(fg)} / 100, but the app will not publish a BTC Cycle Score until more on-chain data is available.`:'Fear & Greed has not loaded yet.'}</p>`
-    : `<p style="font-size:11px;color:#5a5d8a;line-height:1.6;margin-bottom:10px;">BTC Cycle Score is the weighted composite of all loaded indicators. Fear & Greed is displayed separately below.</p>`;
+    ? `<p style="font-size:11px;color:#BA7517;line-height:1.6;margin-bottom:10px;">Partial data loaded: ${metricLoaded} / ${INDS.length} indicators, including ${bgLoaded} / 3 BGeometrics metrics. ${fg!==null&&!isNaN(fg)?`Sentiment Overlay is ${Math.round(fg)} / 100, but the app will not publish a BTC Cycle Score until more on-chain data is available.`:'Sentiment Overlay has not loaded yet.'}</p>`
+    : `<p style="font-size:11px;color:#5a5d8a;line-height:1.6;margin-bottom:10px;">BTC Cycle Score is the weighted composite of all loaded indicators. Sentiment is intentionally capped at a small overlay weight so it confirms, rather than controls, the cycle read.</p>`;
   el.innerHTML=`${warning}<div class="table-wrap"><table><thead><tr><th>Indicator</th><th>Raw value</th><th>Indicator score</th><th>Weight</th><th>Weighted pts</th></tr></thead><tbody>${rows}</tbody></table></div><p style="font-size:10px;color:#3a3d6a;margin-top:8px;">Composite shown: ${comp===null?'not enough data yet':comp+' / 100'} · lower score = better long-term BTC accumulation zone · valid metrics: ${validMetricCount(vals)} / ${INDS.length} · BGeometrics metrics: ${bgMetricCount(vals)} / 3</p>`;
 }
 function updateGauge(vals){
+  vals=sanitizedCycleVals(vals);
   renderScoreBreakdown(vals,null);
   const enoughData=validMetricCount(vals)>=4 && bgMetricCount(vals)>=2;
   if(!enoughData){
