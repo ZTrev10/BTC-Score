@@ -83,6 +83,11 @@ body{background:#07080f;color:#e0e0f0;font-family:'DM Mono','Courier New',monosp
 .op-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;cursor:pointer;}
 .op-ticker{font-size:16px;color:#c8caee;font-weight:500;letter-spacing:0.08em;}
 .op-sub{font-size:10px;color:#4a4d7a;margin-top:4px;line-height:1.5;}
+.price-text{color:#9a9dcc;}
+.sector-text{color:#BA7517;}
+.move-up{color:#1D9E75;}
+.move-down{color:#E24B4A;}
+.move-flat{color:#6a6d9a;}
 .op-score{font-family:'Bebas Neue',sans-serif;font-size:52px;line-height:0.9;text-align:right;}
 .op-label{font-size:10px;letter-spacing:0.12em;text-align:right;margin-top:4px;}
 .op-details{display:none;margin-top:14px;padding-top:14px;border-top:1px solid #1a1c30;}
@@ -184,7 +189,7 @@ td strong{color:#c8caee;font-weight:500;}
             <span class="pill" style="color:#A32D2D;border-color:#A32D2D;">76–100 Avoid</span>
           </div>
           <div class="src-legend">
-            <span style="font-size:11px;color:#3a3d6a;"><span class="src-dot" style="background:#378ADD;"></span>BGeometrics via Vercel proxy (3 calls)</span>
+            <span style="font-size:11px;color:#3a3d6a;"><span class="src-dot" style="background:#378ADD;"></span>BGeometrics via Vercel proxy (4 calls)</span>
             <span style="font-size:11px;color:#3a3d6a;"><span class="src-dot" style="background:#1D9E75;"></span>Free / unlimited</span>
           </div>
           <p style="font-size:10px;color:#2a2d50;margin-top:8px;line-height:1.6;">Lower = historically better buy zone. On-chain data updates daily — 1–2 refreshes/day is sufficient.</p>
@@ -192,17 +197,6 @@ td strong{color:#c8caee;font-weight:500;}
       </div>
     </div>
 
-    <details class="card collapse-card" id="score-breakdown-card">
-      <summary>
-        <span class="collapse-title">SCORE BREAKDOWN</span>
-        <span class="collapse-hint">Raw values, weights, and composite math</span>
-      </summary>
-      <div class="collapse-body">
-        <div id="score-breakdown" class="explain-body">Waiting for full indicator set. Fear & Greed alone is not the BTC Cycle Score.</div>
-      </div>
-    </details>
-
-    
     <details class="card collapse-card" id="btc-deployment-details">
       <summary>
         <span class="deploy-summary">
@@ -228,16 +222,26 @@ td strong{color:#c8caee;font-weight:500;}
 
     <div class="ind-grid" id="ind-grid"></div>
 
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-        <div>
-          <p class="section-label" style="margin-bottom:6px;">ADVANCED CYCLE SIGNALS</p>
-          <p style="font-size:11px;color:#5a5d8a;line-height:1.6;">Confirmation layer only. These do not change the official BTC Score until their data flow is verified.</p>
-        </div>
-        <span style="font-size:10px;color:#3a3d6a;">V1: 2 live · 2 pending data</span>
+    <details class="card collapse-card" id="advanced-cycle-card">
+      <summary>
+        <span class="collapse-title">ADVANCED CYCLE SIGNALS</span>
+        <span class="collapse-hint">Confirmation only · 2 live / 2 pending</span>
+      </summary>
+      <div class="collapse-body">
+        <div style="font-size:11px;color:#5a5d8a;line-height:1.6;margin:12px 0;">Confirmation layer only. These do not change the official BTC Score until their data flow is verified.</div>
+        <div class="ind-grid" id="advanced-cycle-grid"></div>
       </div>
-      <div class="ind-grid" id="advanced-cycle-grid"></div>
-    </div>
+    </details>
+
+    <details class="card collapse-card" id="score-breakdown-card">
+      <summary>
+        <span class="collapse-title">SCORE BREAKDOWN</span>
+        <span class="collapse-hint">Raw values, weights, and composite math</span>
+      </summary>
+      <div class="collapse-body">
+        <div id="score-breakdown" class="explain-body">Waiting for full indicator set. Fear & Greed alone is not the BTC Cycle Score.</div>
+      </div>
+    </details>
 
     <details class="card collapse-card">
       <summary>
@@ -258,8 +262,8 @@ td strong{color:#c8caee;font-weight:500;}
         <div class="explain-body">Net Unrealized Profit/Loss across all holders. Below 0 = most holders underwater (capitulation) — rare and historically a powerful buy signal. Above 0.75 = euphoria, distribution tends to follow.</div>
       </div>
       <div class="explain-row">
-        <div class="explain-title">Price vs Realized Price <span class="explain-src-tag">· CoinGecko proxy</span></div>
-        <div class="explain-body">Realized Price = average cost basis of all Bitcoin. When spot drops below it, the average holder is at a loss — only happens at true cycle bottoms. Uses 365-day price average as a free proxy.</div>
+        <div class="explain-title">Price vs Realized Price <span class="explain-src-tag">· BGeometrics / NUPL-derived fallback</span></div>
+        <div class="explain-body">Realized Price = average cost basis of all Bitcoin. When spot drops below it, the average holder is at a loss. The app uses actual BGeometrics realized price when available; if not, it derives the premium from NUPL so the sign stays consistent with on-chain profit/loss.</div>
       </div>
       <div class="explain-row">
         <div class="explain-title">Fear & Greed Index <span class="explain-src-tag">· Alternative.me</span></div>
@@ -341,6 +345,20 @@ td strong{color:#c8caee;font-weight:500;}
       <button class="btn" onclick="addManualWatchlistItem()">Add to Watchlist</button>
     </div>
     <div class="status" id="watchlist-status"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+      <div>
+        <p class="section-label">BEST NEXT DOLLAR</p>
+        <p style="font-size:11px;color:#3a3d6a;line-height:1.6;">Ranks index core, owned positions, watchlist names, BTC/ETH, and cash.</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input class="small-input" id="next-dollar-amount" type="number" value="1000" min="1" step="100" style="width:110px;" onchange="renderBestNextDollar()">
+        <button class="btn" onclick="renderBestNextDollar()">Rank</button>
+      </div>
+    </div>
+    <div id="best-next-dollar"></div>
   </div>
 
   <div class="card">
@@ -521,7 +539,7 @@ td strong{color:#c8caee;font-weight:500;}
 window.APP_VERSION = "v2.3.1-source-reset-2026-06-06";
 const S={key:'',calls:0};
 const BG_DAILY_LIMIT=15;
-const BG_CALLS_PER_FULL_REFRESH=3;
+const BG_CALLS_PER_FULL_REFRESH=4;
 const BG_CACHE_KEY='trevor_btc_cycle_cache_v3';
 const BG_ENDPOINT_CACHE_KEY='trevor_bgeometrics_endpoint_cache_v1';
 const BG_USAGE_KEY='trevor_bgeometrics_usage_v1';
@@ -621,16 +639,16 @@ const INDS=[
   {id:'mvrvZ',label:'MVRV Z-Score',     src:'BGeometrics',   sc:'#378ADD',w:0.25,ep:'mvrv-zscore'},
   {id:'puell',label:'Puell Multiple',   src:'BGeometrics',   sc:'#378ADD',w:0.22,ep:'puell-multiple'},
   {id:'nupl', label:'NUPL',             src:'BGeometrics',   sc:'#378ADD',w:0.20,ep:'nupl'},
-  {id:'rvp',  label:'Price vs Realized',src:'CoinGecko proxy',sc:'#1D9E75',w:0.15},
+  {id:'rvp',  label:'Price vs Realized',src:'BGeometrics',sc:'#378ADD',w:0.15},
   {id:'fg',   label:'Fear & Greed',     src:'Alternative.me',sc:'#1D9E75',w:0.10},
   {id:'ma',   label:'vs 200-Week MA',   src:'CoinGecko',     sc:'#1D9E75',w:0.08},
 ];
 function sc(id,v){
   if(v===null||isNaN(v))return 50;
   if(id==='mvrvZ')return v<-0.5?5:v<0?14:v<1?27:v<2?42:v<4?58:v<6?75:91;
-  if(id==='puell')return v<0.3?5:v<0.5?14:v<0.8?30:v<1.2?48:v<2?63:v<3.5?78:91;
-  if(id==='nupl') return v<-0.1?5:v<0.05?15:v<0.25?30:v<0.5?50:v<0.65?68:v<0.75?82:93;
-  if(id==='rvp')  return v<-15?5:v<0?17:v<30?34:v<80?52:v<150?68:v<250?80:92;
+  if(id==='puell')return v<0.3?5:v<0.5?14:v<1.0?30:v<1.2?48:v<2?63:v<3.5?78:91;
+  if(id==='nupl') return v<-0.1?5:v<0.05?15:v<0.3?30:v<0.5?50:v<0.65?68:v<0.75?82:93;
+  if(id==='rvp')  return v<-15?5:v<0?17:v<50?34:v<100?52:v<150?68:v<250?80:92;
   if(id==='fg')   return Math.round(v);
   if(id==='ma')   return v<-10?5:v<0?17:v<40?34:v<100?52:v<200?70:v<400?83:93;
   return 50;
@@ -650,7 +668,7 @@ function ctx(id,v){
   if(id==='mvrvZ')return v<0?'⬇ Below 0 — cycle bottom territory only (2015, 2018, 2022)':v<1?'Near 0 — deep value, every prior bottom printed here':v<3?'Mid-range — fair value, cycle maturing':v<6?'Elevated — approaching prior top zones (2021 peak ~8)':'⬆ Extreme — prior tops 7–10, historically signals distribution';
   if(id==='puell')return v<0.5?'⬇ Below 0.5 — miner capitulation, major bottoms here historically':v<0.8?'Below 1 — miners underpaid, accumulation zone':v<1.5?'Near 1 — fair revenue, neutral signal':v<3?'Above 1 — overearning, mid-to-late bull market':'⬆ Above 3 — extreme, historically preceded major corrections';
   if(id==='nupl') return v<0?'⬇ Below 0 — capitulation. Avg holder underwater. Historically strongest buy.':v<0.25?'Hope/fear — recovering from bottom, early accumulation':v<0.5?'Optimism — mid-bull, historically still significant upside':v<0.65?'Belief/thrill — late bull, scale entries with caution':'⬆ Near euphoria (0.75+) — historically very close to cycle tops';
-  if(id==='rvp')  return v<0?'⬇ Price BELOW realized — avg holder at a loss. Only at true cycle bottoms.':v<20?'Just above realized — minimal avg profit, near accumulation zone':v<80?'Moderate premium — mid-cycle range':v<200?'Large premium — late cycle signal':'⬆ Extreme premium — historically near cycle tops';
+  if(id==='rvp')  return v<0?'⬇ Price BELOW realized — avg holder at a loss. Only at true cycle bottoms.':v<20?'Just above realized — minimal avg profit, near accumulation zone':v<50?'Above realized, but still in accumulation-friendly range':v<100?'Moderate premium — mid-cycle range':v<200?'Large premium — late cycle signal':'⬆ Extreme premium — historically near cycle tops';
   if(id==='fg')   return v<20?'⬇ Extreme Fear — historically a buying opportunity when sustained':v<40?'Fear — pessimistic market, often precedes recoveries':v<60?'Neutral — no strong directional signal':v<80?'Greed — optimistic, returns tend to moderate':'⬆ Extreme Greed — historically near-term tops when sustained';
   if(id==='ma')   return v<0?'⬇ BELOW 200W MA — absolute bottom territory, has always held long-term':v<20?'Within 20% of MA — historically deep value':v<100?'Moderate above MA — normal bull market range':v<300?'Extended — late bull market elevated risk':'⬆ Far above MA — stretched, seen at prior cycle peaks (2021: +400%)';
   return'';
@@ -708,13 +726,15 @@ function getMetricVal(id, payload){
   const preferred = {
     mvrvZ:['mvrvzscore','mvrv_zscore','mvrv_z_score','mvrv_z','mvrvz','zscore','z_score','value','v'],
     puell:['puellmultiple','puell_multiple','puell','multiple','value','v'],
-    nupl:['nupl','net_unrealized_profit_loss','value','v']
+    nupl:['nupl','net_unrealized_profit_loss','value','v'],
+    realizedPrice:['realizedprice','realized_price','realisedprice','realised_price','price','value','v']
   }[id] || ['value','v'];
   const n = numericFromRow(row, preferred);
   // Sanity checks stop a percentile/risk value like 81 from becoming a raw indicator.
   if(id==='mvrvZ' && (n===null || n < -5 || n > 20)) return null;
   if(id==='puell' && (n===null || n < 0 || n > 10)) return null;
   if(id==='nupl' && (n===null || n < -1.5 || n > 1.5)) return null;
+  if(id==='realizedPrice' && (n===null || n < 1000 || n > 1000000)) return null;
   return Number.isFinite(n) ? n : null;
 }
 
@@ -851,7 +871,29 @@ function renderAdvancedCycleSignals(data=window._advancedCycle){
 }
 
 function needsFreeBtcIndicators(vals={}){
-  return ['rvp','ma','fg'].some(id=>vals[id]===null||vals[id]===undefined||isNaN(vals[id]));
+  const missing=['rvp','ma','fg'].some(id=>vals[id]===null||vals[id]===undefined||isNaN(vals[id]));
+  const rvpSignConflict=Number(vals.nupl)>0.05&&Number(vals.rvp)<0;
+  return missing||rvpSignConflict;
+}
+function rvpFromNupl(nupl){
+  if(nupl===null||nupl===undefined||nupl==='')return null;
+  const n=Number(nupl);
+  if(!Number.isFinite(n)||n<=-0.95||n>=0.95)return null;
+  return (n/(1-n))*100;
+}
+function chooseRealizedPremium(vals,btcPrice){
+  const implied=rvpFromNupl(vals.nupl);
+  const actual=Number.isFinite(window._realizedPrice)&&window._realizedPrice>0&&Number.isFinite(btcPrice)
+    ? ((btcPrice-window._realizedPrice)/window._realizedPrice)*100
+    : null;
+  if(Number.isFinite(actual)){
+    const signsConflict=Number.isFinite(implied)&&Math.sign(actual)!==Math.sign(implied)&&Math.abs(implied)>5;
+    if(!signsConflict)return {rvp:actual,realized:window._realizedPrice,source:'BGeometrics realized price'};
+  }
+  if(Number.isFinite(implied)&&Number.isFinite(btcPrice)){
+    return {rvp:implied,realized:btcPrice/(1+implied/100),source:'NUPL-implied realized price'};
+  }
+  return {rvp:null,realized:null,source:'Realized price unavailable'};
 }
 async function refreshFreeBtcIndicators(vals,{cacheSource='free-btc-metrics'}={}){
   const next={mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null,...vals};
@@ -877,18 +919,17 @@ async function refreshFreeBtcIndicators(vals,{cacheSource='free-btc-metrics'}={}
         const prices=history.prices;
         const btcPrice=prices[prices.length-1][1];
         const maRows=prices.slice(-1400).map(p=>p[1]).filter(Number.isFinite);
-        const rpRows=prices.slice(-365).map(p=>p[1]).filter(Number.isFinite);
         const ma200=maRows.reduce((a,b)=>a+b,0)/maRows.length;
-        const rp=rpRows.reduce((a,b)=>a+b,0)/rpRows.length;
         if(Number.isFinite(btcPrice)&&Number.isFinite(ma200)&&ma200>0)next.ma=((btcPrice-ma200)/ma200)*100;
-        if(Number.isFinite(btcPrice)&&Number.isFinite(rp)&&rp>0)next.rvp=((btcPrice-rp)/rp)*100;
+        const realized=chooseRealizedPremium(next,btcPrice);
+        if(Number.isFinite(realized.rvp))next.rvp=realized.rvp;
         window._advancedCycle=buildAdvancedCycleFromPrices(prices);
         const pd=document.getElementById('price-display');
         if(pd&&Number.isFinite(btcPrice))pd.textContent='BTC $'+btcPrice.toLocaleString(undefined,{maximumFractionDigits:0});
         const rd=document.getElementById('realized-display');
-        if(rd&&Number.isFinite(rp))rd.textContent='Realized proxy $'+Math.round(rp).toLocaleString();
+        if(rd&&Number.isFinite(realized.realized))rd.textContent=`${realized.source} $`+Math.round(realized.realized).toLocaleString();
         window._btcPrice=Number.isFinite(btcPrice)?btcPrice:window._btcPrice;
-        window._realizedProxy=Number.isFinite(rp)?rp:window._realizedProxy;
+        window._realizedProxy=Number.isFinite(realized.realized)?realized.realized:window._realizedProxy;
         Object.assign(vals,next);
         renderCards(next);renderAdvancedCycleSignals(window._advancedCycle);updateGauge(next);
         setStatus(`Free BTC metrics updated from ${history.source} `+new Date().toLocaleTimeString());
@@ -973,6 +1014,8 @@ function hydrateScoreFromCachedBg(){
     const cached=cachedBgMetric(i.id,i.ep);
     if(cached)vals[i.id]=cached.value;
   });
+  const realizedCached=cachedBgMetric('realizedPrice','realized-price');
+  if(realizedCached)window._realizedPrice=realizedCached.value;
   renderCards(vals);
   updateGauge(vals);
   cacheCycle(vals,{source:'cached-bg-debug'});
@@ -998,6 +1041,8 @@ async function refreshAll(){
     const cached=cachedBgMetric(i.id,i.ep);
     if(cached)vals[i.id]=cached.value;
   });
+  const realizedCached=cachedBgMetric('realizedPrice','realized-price');
+  if(realizedCached)window._realizedPrice=realizedCached.value;
   renderCards(vals);
   const bgErrors=[];
   const handleBgFail=(id,ep,e)=>{
@@ -1027,8 +1072,28 @@ async function refreshAll(){
   const p1=loadBgMetric('mvrvZ','mvrv-zscore');
   const p2=loadBgMetric('puell','puell-multiple');
   const p3=loadBgMetric('nupl','nupl');
+  const pRealized=(()=>{
+    const fresh=cachedBgMetric('realizedPrice','realized-price');
+    const entry=cachedBgEndpoint('realized-price');
+    if(fresh&&bgCacheIsFresh(entry)){window._realizedPrice=fresh.value;return Promise.resolve();}
+    return bgCall('realized-price').then(d=>{
+      const rp=getMetricVal('realizedPrice',d);
+      if(rp)window._realizedPrice=rp;
+    }).catch(e=>bgErrors.push(`realized-price failed: ${e.message}`));
+  })();
   const p4=refreshFreeBtcIndicators(vals,{cacheSource:'live-free-btc-metrics'});
-  await Promise.all([p1,p2,p3,p4]);
+  await Promise.all([p1,p2,p3,pRealized,p4]);
+  if(Number.isFinite(window._btcPrice)){
+    const realized=chooseRealizedPremium(vals,window._btcPrice);
+    if(Number.isFinite(realized.rvp)){
+      vals.rvp=realized.rvp;
+      if(Number.isFinite(realized.realized)){
+        window._realizedProxy=realized.realized;
+        const rd=document.getElementById('realized-display');
+        if(rd)rd.textContent=`${realized.source} $`+Math.round(realized.realized).toLocaleString();
+      }
+    }
+  }
   updateGauge(vals);
   cacheCycle(vals,{source:'live'});
   document.getElementById('updated-display').textContent='Updated '+new Date().toLocaleTimeString();
@@ -1078,7 +1143,7 @@ async function loadBrief(){
   const scoreLbl=cs?cs.label.split('—')[0].trim():'Visit BTC Score tab first';
   const fgLbl=fg===null?'—':fg<20?'Extreme Fear':fg<40?'Fear':fg<60?'Neutral':fg<80?'Greed':'Extreme Greed';
   const fgCol=fg===null?'#3a3d6a':fg<20?'#1D9E75':fg<40?'#639922':fg<60?'#BA7517':fg<80?'#E24B4A':'#A32D2D';
-  const chgStr=v=>v==null?'':' ('+(v>0?'+':'')+v.toFixed(1)+'% 24h)';
+  const chgStr=v=>v==null?'':` (${moveHtml(v)} 24h)`;
   const maAbove=(btcP&&ma200)?((btcP-ma200)/ma200*100).toFixed(1)+'% above 200W MA':'—';
   document.getElementById('brief-content').innerHTML=`
     <div class="card">
@@ -1112,7 +1177,7 @@ async function loadBrief(){
     
     <p class="footer-note">Not financial advice · Prices: CoinGecko · Sentiment: Alternative.me · News refreshes on demand</p>
   `;
-  try{const top=rankedOpportunities()[0];const act=actionFor(top.score,top.thesis,top.confidence);const d=deploymentForScore(currentCycleScore());document.getElementById('brief-opportunity-mini').innerHTML=`<div class="score-mini"><div class="score-mini-num" style="color:${act.color};">${top.score}</div><div><div style="font-size:12px;color:${act.color};letter-spacing:0.12em;margin-bottom:4px;">${top.ticker} · ${act.label}</div><div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${top.drop<0?'Down':'Change'} ${pct(top.drop)} · ${top.reason}</div><div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Reserve suggestion: ${money(d.amount)} if BTC Score and price drawdown triggers are both met.</div></div></div>`;}catch(e){}
+  try{const top=rankedOpportunities()[0];const act=actionFor(top.score,top.thesis,top.confidence);const d=deploymentForScore(currentCycleScore());document.getElementById('brief-opportunity-mini').innerHTML=`<div class="score-mini"><div class="score-mini-num" style="color:${act.color};">${top.score}</div><div><div style="font-size:12px;color:${act.color};letter-spacing:0.12em;margin-bottom:4px;">${top.ticker} · ${act.label}</div><div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${moveHtml(top.drop)} · ${top.reason}</div><div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Reserve suggestion: ${money(d.amount)} if BTC Score and price drawdown triggers are both met.</div></div></div>`;}catch(e){}
   document.getElementById('brief-loading').style.display='none';
   document.getElementById('brief-content').style.display='block';
   try{loadLiveNews();}catch(e){}
@@ -1217,6 +1282,21 @@ const FEATURES=[
 
 function money(n){return '$'+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});}
 function pct(n){return (Number(n)>=0?'+':'')+Number(n||0).toFixed(1)+'%';}
+function priceHtml(n,decimals=2){
+  return Number.isFinite(Number(n))?`<span class="price-text">$${Number(n).toLocaleString(undefined,{maximumFractionDigits:decimals})}</span>`:'<span class="price-text">Price unavailable</span>';
+}
+function sectorHtml(s){return `<span class="sector-text">${esc(s||'Unclassified')}</span>`;}
+function moveDirection(n){
+  const v=Number(n);
+  if(!Number.isFinite(v))return {label:'Move unavailable',cls:'move-flat',display:'—'};
+  if(v>0)return {label:'Up',cls:'move-up',display:`${Math.abs(v).toFixed(1)}%`};
+  if(v<0)return {label:'Down',cls:'move-down',display:`${Math.abs(v).toFixed(1)}%`};
+  return {label:'Flat',cls:'move-flat',display:'0.0%'};
+}
+function moveHtml(n){
+  const m=moveDirection(n);
+  return `<span class="${m.cls}">${m.label} ${m.display}</span>`;
+}
 function actionFor(score,thesis,confidence){
   if(thesis<50)return {label:'TOO RISKY',color:'#A32D2D'};
   if(score>=80&&confidence>=65)return {label:'BUY',color:'#1D9E75'};
@@ -1280,15 +1360,14 @@ function renderOpportunities(){
   const sorted=rankedOpportunities();
   document.getElementById('opportunity-list').innerHTML=sorted.map(item=>{
     const a=actionFor(item.score,item.thesis,item.confidence);
-    const priceTag=item.livePrice?` · $${Number(item.livePrice).toLocaleString(undefined,{maximumFractionDigits:2})}`:'';
+    const priceTag=item.livePrice?` · ${priceHtml(item.livePrice)}`:'';
     const liveTag=item.isLive?'<span style="color:#1D9E75;font-size:9px;margin-left:6px;">● LIVE</span>':'<span style="color:#3a3d6a;font-size:9px;margin-left:6px;">est.</span>';
-    const isDown=item.drop<-4.5;
     const newsMeta=item.liveNews?`${item.liveNews.source||'News'}${item.liveNews.published?' · '+item.liveNews.published:''}`:'Placeholder context — waiting for a live down-5% news trigger.';
     return `<div class="op-card">
       <div class="op-head" onclick="toggleCard(this)">
         <div>
           <div class="op-ticker">${item.ticker}${liveTag} <span style="font-size:10px;color:#3a3d6a;">${item.name}</span></div>
-          <div class="op-sub">${isDown?'Down':'Change'} ${pct(item.drop)}${priceTag} · ${item.category}</div>
+          <div class="op-sub">${moveHtml(item.drop)}${priceTag} · ${sectorHtml(item.category)}</div>
         </div>
         <div>
           <div class="op-score" style="color:${a.color};">${item.score}</div>
@@ -1457,14 +1536,131 @@ function watchlistScore(item){
   const adjustedAction=thesisBreak?{label:'DO NOT ADD',color:'#A32D2D',copy:'Quality or thesis score is too weak. Do more research before committing capital.'}:action;
   return {score:adjusted,action:adjustedAction,price,move,quality,thesis,valuation,macro,opportunity,technical,history,confidence};
 }
+function holdingAllocMap(){
+  const rows=aggregateHoldings(portfolio());
+  const total=rows.reduce((a,r)=>a+r.value,0);
+  const map={};
+  rows.forEach(r=>{map[r.symbol]={...r,alloc:total?r.value/total*100:0,total};});
+  return {map,total,rows};
+}
+function targetAllocationFor(symbol,source=''){
+  const s=cleanSymbol(symbol);
+  if(['VOO','SPY','VTI','VT'].includes(s))return {target:75,max:85,label:'Core index foundation'};
+  if(s==='BTC')return {target:6,max:10,label:'BTC risk sleeve'};
+  if(s==='ETH')return {target:2,max:4,label:'ETH smaller crypto sleeve'};
+  if(assetClass(s)==='Crypto')return {target:2,max:4,label:'Speculative crypto sleeve'};
+  const profile=researchProfile(s);
+  if(profile.fundamental>=85&&profile.thesis>=80)return {target:8,max:12,label:'Quality compounder sleeve'};
+  if(String(source).includes('Emerging'))return {target:3,max:6,label:'Emerging leader sleeve'};
+  if(profile.fundamental<60)return {target:1,max:3,label:'Speculative / research-only sleeve'};
+  return {target:4,max:8,label:'Single-stock sleeve'};
+}
+function btcNextDollarScore(){
+  const cycle=currentCycleScore();
+  if(cycle===null)return {score:55,action:{label:'DCA ONLY',color:'#BA7517',copy:'Load BTC Score before making a larger reserve decision.'},reason:'BTC is eligible for base DCA, but reserve buying needs cycle data.'};
+  const d=deploymentForScore(cycle);
+  if(cycle<10)return {score:88,action:{label:'PRIORITIZE BTC',color:'#1D9E75',copy:`BTC Score ${cycle}: ${d.zone}. Reserve deployment may be justified if price-drawdown rules are also met.`},reason:d.copy};
+  if(cycle<20)return {score:78,action:{label:'ADD BTC',color:'#639922',copy:`BTC Score ${cycle}: reserve tranche may be active if drawdown confirms.`},reason:d.copy};
+  return {score:58,action:{label:'DCA ONLY',color:'#BA7517',copy:`BTC Score ${cycle}: keep BTC to base DCA unless the score drops below 20.`},reason:'Cycle score is not in reserve-deployment zone.'};
+}
+function candidateBaseScore(symbol,source,item=null){
+  const s=cleanSymbol(symbol);
+  if(['VOO','SPY','VTI','VT'].includes(s))return {score:74,action:{label:'CORE ADD',color:'#639922',copy:'Broad index exposure should usually be the default next dollar unless a clearly superior opportunity appears.'},price:livePriceFor(s),move:liveChangeFor(s),reason:'Simple, diversified compounding core.'};
+  if(s==='BTC')return btcNextDollarScore();
+  if(s==='ETH'){
+    const btc=btcNextDollarScore();
+    return {score:btc.score>=78?68:56,action:{label:btc.score>=78?'SMALL ETH ADD':'DCA ONLY',color:btc.score>=78?'#639922':'#BA7517',copy:'ETH can participate when crypto-wide fear is attractive, but keep it smaller than BTC unless conviction is higher.'},reason:'Higher upside/complexity crypto sleeve.'};
+  }
+  if(item)return watchlistScore(item);
+  const profile=researchProfile(s);
+  const valuation=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:RESEARCH_SCORE_DEFAULTS[s]?.valuation??50));
+  const macro=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:RESEARCH_SCORE_DEFAULTS[s]?.macro??50));
+  const profileScore=Math.round(clamp(profile.fundamental*0.25+profile.thesis*0.25+valuation*0.18+macro*0.12+(profile.opportunity||50)*0.20));
+  const action=researchDecision(profileScore,'new');
+  return {score:profileScore,action,price:livePriceFor(s),move:liveChangeFor(s),reason:profile.summary||'Owned position scored from local research profile.'};
+}
+function nextDollarAction(score,currentAlloc,target,max){
+  if(currentAlloc>=max)return {label:'DO NOT ADD',color:'#A32D2D',copy:'Already above max sleeve size. New money should go elsewhere unless target weights change.'};
+  if(currentAlloc>=target&&score<82)return {label:'WAIT',color:'#BA7517',copy:'Good enough to own, but not the best next dollar while already near target.'};
+  if(score>=82)return {label:'BEST ADD',color:'#1D9E75',copy:'Strong candidate for new capital.'};
+  if(score>=72)return {label:'ADD',color:'#639922',copy:'Reasonable next-dollar candidate, especially if underweight.'};
+  if(score>=60)return {label:'WATCH',color:'#BA7517',copy:'Keep on deck, but require better price or clearer signal.'};
+  return {label:'WAIT',color:'#E24B4A',copy:'Not attractive enough for new money today.'};
+}
+function buildNextDollarCandidates(){
+  const {map,total,rows}=holdingAllocMap();
+  const entries=new Map();
+  const add=(symbol,source,item=null)=>{
+    const s=cleanSymbol(symbol);
+    if(!s||assetClass(s)==='Cash'||assetClass(s)==='Bond / Cash-like')return;
+    const existing=entries.get(s)||{symbol:s,sources:new Set(),item:null};
+    existing.sources.add(source);
+    if(item)existing.item=item;
+    entries.set(s,existing);
+  };
+  ['VOO','BTC','ETH'].forEach(s=>add(s,s==='VOO'?'Core Index':'Crypto Rule'));
+  watchlistRows().forEach(item=>add(item.ticker,item.source||'Watchlist',item));
+  rows.forEach(r=>add(r.symbol,'Owned'));
+  const amount=Number(document.getElementById('next-dollar-amount')?.value||1000)||1000;
+  const candidates=[...entries.values()].map(e=>{
+    const source=[...e.sources].join(' + ');
+    const base=candidateBaseScore(e.symbol,source,e.item);
+    const alloc=map[e.symbol]?.alloc||0;
+    const value=map[e.symbol]?.value||0;
+    const target=targetAllocationFor(e.symbol,source);
+    const underBoost=total?clamp((target.target-alloc)*1.2,-18,14):0;
+    const concentrationPenalty=alloc>=target.max?28:alloc>=target.target?10:0;
+    const unknownPenalty=(e.item&&e.item.category==='Unclassified ticker')?8:0;
+    const finalScore=Math.round(clamp(base.score+underBoost-concentrationPenalty-unknownPenalty));
+    const action=nextDollarAction(finalScore,alloc,target.target,target.max);
+    const price=base.price??map[e.symbol]?.price??null;
+    return {
+      symbol:e.symbol,
+      name:watchlistSeedFor(e.symbol).name,
+      source,
+      score:finalScore,
+      baseScore:base.score,
+      action,
+      reason:base.reason||base.action?.copy||'Ranked from local score inputs.',
+      currentAlloc:alloc,
+      currentValue:value,
+      target:target.target,
+      max:target.max,
+      targetLabel:target.label,
+      price,
+      shares:price?amount/price:null
+    };
+  });
+  const cashScore=candidates.some(c=>c.score>=72&&c.currentAlloc<c.max)?48:62;
+  candidates.push({symbol:'CASH',name:'Cash / Wait',source:'Risk Control',score:cashScore,baseScore:cashScore,action:{label:cashScore>=60?'WAIT IN CASH':'LOW PRIORITY',color:cashScore>=60?'#BA7517':'#3a3d6a',copy:'Hold cash when no candidate clears the bar or when you want dry powder.'},reason:'Default when no asset is clearly better than patience.',currentAlloc:0,currentValue:0,target:0,max:100,targetLabel:'Dry powder',price:null,shares:null});
+  return candidates.sort((a,b)=>b.score-a.score);
+}
+function renderBestNextDollar(){
+  const el=document.getElementById('best-next-dollar');
+  if(!el)return;
+  const amount=Number(document.getElementById('next-dollar-amount')?.value||1000)||1000;
+  const rows=buildNextDollarCandidates();
+  const top=rows.slice(0,5);
+  el.innerHTML=`<div class="detail-grid" style="margin-top:0;">
+    ${top.slice(0,3).map((c,idx)=>`<div class="detail-box">
+      <div class="detail-label">#${idx+1} NEXT $${amount.toLocaleString()}</div>
+      <div class="detail-text"><strong style="color:${c.action.color};font-size:14px;">${esc(c.symbol)} · ${c.score}</strong><br>${esc(c.action.label)} · ${esc(c.name)}<br>${c.price?`Approx ${c.shares.toFixed(c.shares>=10?1:3)} shares/units at ${priceHtml(c.price,2)}.<br>`:''}${esc(c.action.copy)}</div>
+    </div>`).join('')}
+  </div>
+  <div class="table-wrap"><table><thead><tr><th>Rank</th><th>Candidate</th><th>Action</th><th>Score</th><th>Current Alloc</th><th>Target</th><th>Why</th></tr></thead><tbody>
+    ${top.map((c,idx)=>`<tr><td>${idx+1}</td><td><strong>${esc(c.symbol)}</strong><br><span style="color:#3a3d6a;">${esc(c.source)}</span></td><td style="color:${c.action.color};">${esc(c.action.label)}</td><td>${c.score}</td><td>${c.currentAlloc.toFixed(1)}%</td><td>${c.target}% / max ${c.max}%</td><td>${esc(c.reason)}</td></tr>`).join('')}
+  </tbody></table></div>
+  <p style="font-size:10px;color:#3a3d6a;line-height:1.6;margin-top:8px;">Portfolio-aware: owned positions get concentration penalties above target, underweight high-score names get a boost, BTC reserve buying only outranks core when BTC Score is below 20.</p>`;
+}
 function renderWatchlist(){
   const el=document.getElementById('watchlist-list');
   if(!el)return;
+  renderBestNextDollar();
   const rows=watchlistRows().map(item=>({item,score:watchlistScore(item)})).sort((a,b)=>b.score.score-a.score.score);
   if(!rows.length){el.innerHTML='<div class="card"><p class="section-label">WATCHLIST EMPTY</p><p style="font-size:12px;color:#5a5d8a;">Add tickers from Opportunities, Emerging Leaders, or the manual box above.</p></div>';return;}
   el.innerHTML=rows.map(({item,score})=>{
-    const price=score.price?`$${Number(score.price).toLocaleString(undefined,{maximumFractionDigits:2})}`:'Price unavailable';
-    const move=score.move!=null?`${score.move>=0?'+':''}${Number(score.move).toFixed(1)}%`:'move unavailable';
+    const price=score.price?priceHtml(score.price):'<span class="price-text">Price unavailable</span>';
+    const move=score.move!=null?moveHtml(score.move):'<span class="move-flat">Move unavailable</span>';
     const added=item.addedAt?new Date(item.addedAt).toLocaleDateString():'starter';
     const stored=userWatchlist().some(r=>r.ticker===item.ticker);
     const scores=[
@@ -1475,7 +1671,7 @@ function renderWatchlist(){
       <div class="op-head" onclick="toggleCard(this)">
         <div>
           <div class="op-ticker">${esc(item.ticker)} <span style="font-size:10px;color:#3a3d6a;">${esc(item.name)}</span></div>
-          <div class="op-sub">${esc(item.category||'Watchlist')} · ${price} · ${move} · ${esc(item.source||'Manual')}</div>
+          <div class="op-sub">${sectorHtml(item.category||'Watchlist')} · ${price} · ${move} · ${esc(item.source||'Manual')}</div>
         </div>
         <div>
           <div class="op-score" style="color:${score.action.color};">${score.score}</div>
@@ -1540,8 +1736,8 @@ function renderResearchCard(r){
   const scores=[
     ['Fundamental',r.fundamental],['Thesis',r.thesis],['Valuation',r.valuationScore],['Macro',r.macroScore],['Opportunity',r.opportunity]
   ].map(([label,val])=>`<div class="research-score"><div class="detail-label">${label.toUpperCase()}</div><div class="research-score-num" style="color:${col(val)};">${Math.round(val)}</div></div>`).join('');
-  const priceLine=r.price?`$${Number(r.price).toLocaleString(undefined,{maximumFractionDigits:2})}`:'Price unavailable';
-  const moveLine=r.liveDrop!=null?`${r.liveDrop>=0?'+':''}${Number(r.liveDrop).toFixed(1)}% recent move`:'No live move available';
+  const priceLine=r.price?priceHtml(r.price):'<span class="price-text">Price unavailable</span>';
+  const moveLine=r.liveDrop!=null?`${moveHtml(r.liveDrop)} recent move`:'<span class="move-flat">No live move available</span>';
   const alt=r.bestAlt?`${r.bestAlt.ticker} (${researchDecision(r.bestAlt.score,'new').label}, score ${r.bestAlt.score})`:'cash / wait';
   document.getElementById('research-output').innerHTML=`<div class="card">
     <p class="section-label">WOULD I BUY THIS TODAY?</p>
@@ -1549,7 +1745,7 @@ function renderResearchCard(r){
       <div class="score-mini-num" style="color:${r.decision.color};">${r.score}</div>
       <div>
         <div style="font-size:13px;color:${r.decision.color};letter-spacing:0.12em;margin-bottom:4px;">${esc(r.ticker)} · ${r.decision.label}</div>
-        <div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${esc(r.name)} · ${esc(r.type)} · ${priceLine} · ${moveLine}</div>
+        <div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${esc(r.name)} · ${sectorHtml(r.type)} · ${priceLine} · ${moveLine}</div>
         <div style="font-size:11px;color:#7a7daa;margin-top:4px;line-height:1.6;">${esc(r.decision.copy)}</div>
       </div>
     </div>
@@ -1591,7 +1787,7 @@ function renderResearchHistory(){
   if(!el)return;
   const rows=researchHistory();
   if(!rows.length){el.textContent='No saved research yet.';return;}
-  el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Date</th><th>Ticker</th><th>Decision</th><th>Score</th><th>Price</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${new Date(r.createdAt).toLocaleDateString()}</td><td><strong>${esc(r.ticker)}</strong></td><td>${esc(r.decision?.label||'—')}</td><td>${r.score}</td><td>${r.price?money(r.price):'—'}</td></tr>`).join('')}</tbody></table></div>`;
+  el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Date</th><th>Ticker</th><th>Decision</th><th>Score</th><th>Price</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${new Date(r.createdAt).toLocaleDateString()}</td><td><strong>${esc(r.ticker)}</strong></td><td>${esc(r.decision?.label||'—')}</td><td>${r.score}</td><td>${r.price?priceHtml(r.price,2):'—'}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function clearResearchHistory(){if(confirm('Clear saved research snapshots from this browser?'))saveResearchHistory([]);}
 
@@ -1650,13 +1846,13 @@ function aggregateHoldings(rows){
 function renderHoldingRows(rows,total){
   return rows.map(r=>{
     const value=holdingValue(r), basis=holdingBasis(r), gl=value-basis, alloc=total?value/total*100:0;
-    return `<tr><td><strong>${esc(r.symbol)}</strong></td><td>${esc(normalizeAccount(r.account,r.symbol))}</td><td>${esc(assetClass(r.symbol))}</td><td>${Number(r.qty).toLocaleString()}</td><td>${r.cost?money(r.cost):'—'}</td><td>${money(r.price)}</td><td>${money(value)}</td><td>${alloc.toFixed(1)}%</td><td style="color:${gl>=0?'#1D9E75':'#E24B4A'};">${r.cost?money(gl):'—'}</td></tr>`;
+    return `<tr><td><strong>${esc(r.symbol)}</strong></td><td>${esc(normalizeAccount(r.account,r.symbol))}</td><td>${sectorHtml(assetClass(r.symbol))}</td><td>${Number(r.qty).toLocaleString()}</td><td>${r.cost?money(r.cost):'—'}</td><td>${priceHtml(r.price,2)}</td><td>${money(value)}</td><td>${alloc.toFixed(1)}%</td><td style="color:${gl>=0?'#1D9E75':'#E24B4A'};">${r.cost?money(gl):'—'}</td></tr>`;
   }).join('');
 }
 function renderAggregateRows(rows,total){
   return rows.map(r=>{
     const gl=r.value-r.basis, alloc=total?r.value/total*100:0;
-    return `<tr><td><strong>${esc(r.symbol)}</strong></td><td>${esc(r.accounts)}</td><td>${esc(r.assetClass)}</td><td>${Number(r.qty).toLocaleString()}</td><td>${r.avgCost?money(r.avgCost):'—'}</td><td>${money(r.price)}</td><td>${money(r.value)}</td><td>${alloc.toFixed(1)}%</td><td style="color:${gl>=0?'#1D9E75':'#E24B4A'};">${r.basis?money(gl):'—'}</td></tr>`;
+    return `<tr><td><strong>${esc(r.symbol)}</strong></td><td>${esc(r.accounts)}</td><td>${sectorHtml(r.assetClass)}</td><td>${Number(r.qty).toLocaleString()}</td><td>${r.avgCost?money(r.avgCost):'—'}</td><td>${priceHtml(r.price,2)}</td><td>${money(r.value)}</td><td>${alloc.toFixed(1)}%</td><td style="color:${gl>=0?'#1D9E75':'#E24B4A'};">${r.basis?money(gl):'—'}</td></tr>`;
   }).join('');
 }
 function renderPortfolio(){
@@ -1697,6 +1893,7 @@ function renderPortfolio(){
   if(btc&&total){msg.push(`BTC allocation is ${((btc.qty*btc.price)/total*100).toFixed(1)}% of loaded portfolio.`);}else msg.push('BTC holding not loaded yet.');
   if(eth&&total){msg.push(`ETH allocation is ${((eth.qty*eth.price)/total*100).toFixed(1)}% of loaded portfolio.`);}else msg.push('ETH holding not loaded yet.');
   document.getElementById('portfolio-strategy').innerHTML=msg.map(m=>`<div class="metric-row"><span>${m}</span></div>`).join('');
+  try{renderBestNextDollar();}catch(e){}
 }
 function sectorFor(symbol){
   const s=String(symbol||'').toUpperCase();
@@ -1773,7 +1970,7 @@ function analyzePortfolio(){
   const strongest=investments.slice(0,5);
   const weakest=[...investments].sort((a,b)=>a.score-b.score).slice(0,5);
   const cashValue=cashRows.reduce((a,r)=>a+r.value,0);
-  const actionRows=investments.map(r=>`<tr><td><strong>${esc(r.symbol)}</strong></td><td>${r.score}</td><td>${esc(r.action)}</td><td>${r.alloc.toFixed(1)}%</td><td>${esc(r.theme)}</td><td>${esc(r.sector)}</td></tr>`).join('');
+  const actionRows=investments.map(r=>`<tr><td><strong>${esc(r.symbol)}</strong></td><td>${r.score}</td><td>${esc(r.action)}</td><td>${r.alloc.toFixed(1)}%</td><td>${sectorHtml(r.theme)}</td><td>${sectorHtml(r.sector)}</td></tr>`).join('');
   box.innerHTML=`<div class="grid-2">
     <div class="detail-box"><div class="detail-label">HIGHEST CONVICTION</div><div class="detail-text">${strongest.length?strongest.map(r=>`${esc(r.symbol)} ${r.score} (${esc(r.action)})`).join('<br>'):'No scored investments yet.'}</div></div>
     <div class="detail-box"><div class="detail-label">WEAKEST HOLDINGS</div><div class="detail-text">${weakest.length?weakest.map(r=>`${esc(r.symbol)} ${r.score} (${esc(r.action)})`).join('<br>'):'No scored investments yet.'}</div></div>
@@ -1954,7 +2151,8 @@ async function showBgDebug(){
   const eps=[
     {ep:'mvrv-zscore',id:'mvrvZ'},
     {ep:'puell-multiple',id:'puell'},
-    {ep:'nupl',id:'nupl'}
+    {ep:'nupl',id:'nupl'},
+    {ep:'realized-price',id:'realizedPrice'}
   ];
   const results=[];
   for(const {ep,id} of eps){

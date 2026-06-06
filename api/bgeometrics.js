@@ -1,4 +1,4 @@
-const ALLOWED_ENDPOINTS = new Set(['mvrv-zscore', 'puell-multiple', 'nupl']);
+const ALLOWED_ENDPOINTS = new Set(['mvrv-zscore', 'puell-multiple', 'nupl', 'realized-price', 'price']);
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

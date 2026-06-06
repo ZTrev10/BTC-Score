@@ -4,7 +4,9 @@
 const ALLOWED_ENDPOINTS = new Set([
   'mvrv-zscore',
   'puell-multiple',
-  'nupl'
+  'nupl',
+  'realized-price',
+  'price'
 ]);
 
 export default async function handler(req, res) {
