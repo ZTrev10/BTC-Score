@@ -143,6 +143,7 @@ td strong{color:#c8caee;font-weight:500;}
         <button class="btn" onclick="forceRefreshAll()">↻ Force Refresh</button>
         <button class="btn" onclick="clearCycleCache()">Clear Cache</button>
         <button class="btn" onclick="startFetch()">Use proxy</button>
+        <button class="btn" onclick="showBgDebug()" id="debug-btn">🔍 Debug BG</button>
       </div>
     </div>
 
@@ -188,6 +189,12 @@ td strong{color:#c8caee;font-weight:500;}
         </div>
       </div>
       <div id="btc-reserve-ladder"></div>
+    </div>
+
+    <div id="bg-debug-panel" style="display:none;" class="card">
+      <p class="section-label" style="margin-bottom:10px;">BGEOMETRICS RAW RESPONSE DEBUG</p>
+      <p style="font-size:11px;color:#5a5d8a;margin-bottom:10px;line-height:1.6;">Fetching raw responses from all 3 BGeometrics endpoints via your Vercel proxy. This shows exactly what the API returns so we can fix any field-name or auth issues.</p>
+      <div id="bg-debug-output" class="explain-body">Loading…</div>
     </div>
 
     <div class="ind-grid" id="ind-grid"></div>
@@ -565,16 +572,43 @@ function updateGauge(vals){
   window._cycleScore={score:comp,color:c,label:zlbl(comp),inputs:vals}; try{renderOpportunities();renderPortfolio();}catch(e){}
 }
 
+function showBgError(msg){
+  const el=document.getElementById('status-msg');
+  if(el)el.textContent=msg;
+  // Also append to score breakdown so it's visible without scrolling to setup panel
+  const bd=document.getElementById('score-breakdown');
+  if(bd&&msg){const p=document.createElement('p');p.style.cssText='font-size:11px;color:#E24B4A;margin-top:8px;line-height:1.6;';p.textContent='⚠ BGeometrics: '+msg;bd.appendChild(p);}
+}
 async function refreshAll(){
   document.getElementById('updated-display').textContent='Fetching...';
+  const statusEl=document.getElementById('status-msg');
+  if(statusEl)statusEl.textContent='';
   const vals={mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null};
   renderCards(vals);
   let btcPrice=null;
-  const p1=bgCall('mvrv-zscore').then(d=>{vals.mvrvZ=getMetricVal('mvrvZ', d);renderCards(vals);updateGauge(vals);}).catch(()=>{});
-  const p2=bgCall('puell-multiple').then(d=>{vals.puell=getMetricVal('puell', d);renderCards(vals);updateGauge(vals);}).catch(()=>{});
-  const p3=bgCall('nupl').then(d=>{vals.nupl=getMetricVal('nupl', d);renderCards(vals);updateGauge(vals);}).catch(()=>{});
+  const bgErrors=[];
+  const p1=bgCall('mvrv-zscore').then(d=>{
+    vals.mvrvZ=getMetricVal('mvrvZ', d);
+    if(vals.mvrvZ===null)bgErrors.push('mvrv-zscore: value out of expected range or missing field (raw: '+JSON.stringify(d).slice(0,120)+')');
+    renderCards(vals);updateGauge(vals);
+  }).catch(e=>{bgErrors.push('mvrv-zscore failed: '+e.message);});
+  const p2=bgCall('puell-multiple').then(d=>{
+    vals.puell=getMetricVal('puell', d);
+    if(vals.puell===null)bgErrors.push('puell-multiple: value out of expected range or missing field (raw: '+JSON.stringify(d).slice(0,120)+')');
+    renderCards(vals);updateGauge(vals);
+  }).catch(e=>{bgErrors.push('puell-multiple failed: '+e.message);});
+  const p3=bgCall('nupl').then(d=>{
+    vals.nupl=getMetricVal('nupl', d);
+    if(vals.nupl===null)bgErrors.push('nupl: value out of expected range or missing field (raw: '+JSON.stringify(d).slice(0,120)+')');
+    renderCards(vals);updateGauge(vals);
+  }).catch(e=>{bgErrors.push('nupl failed: '+e.message);});
   const p4=fetch('https://api.alternative.me/fng/?limit=1').then(r=>r.json()).then(d=>{vals.fg=parseInt(d.data[0].value);renderCards(vals);updateGauge(vals);}).catch(()=>{});
-  const p5=fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1500&interval=daily').then(r=>r.json()).then(d=>{
+  // Route CoinGecko through Vercel proxy to avoid browser-side rate limits
+  const cgUrl='/api/coingecko?path=coins%2Fbitcoin%2Fmarket_chart&vs_currency=usd&days=1500&interval=daily';
+  const p5=fetch(cgUrl).then(r=>{
+    if(!r.ok)throw new Error('CoinGecko proxy '+r.status);
+    return r.json();
+  }).then(d=>{
     const prices=d.prices;btcPrice=prices[prices.length-1][1];
     const ma200=prices.slice(-1400).map(p=>p[1]).reduce((a,b)=>a+b,0)/Math.min(1400,prices.length);
     vals.ma=((btcPrice-ma200)/ma200)*100;
@@ -585,12 +619,29 @@ async function refreshAll(){
     window._btcPrice=btcPrice;
     window._realizedProxy=rp;
     renderCards(vals);updateGauge(vals);
-  }).catch(()=>{});
+  }).catch(e=>{
+    // Fallback: try direct CoinGecko if proxy isn't deployed yet
+    return fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1500&interval=daily').then(r=>r.json()).then(d=>{
+      const prices=d.prices;btcPrice=prices[prices.length-1][1];
+      const ma200=prices.slice(-1400).map(p=>p[1]).reduce((a,b)=>a+b,0)/Math.min(1400,prices.length);
+      vals.ma=((btcPrice-ma200)/ma200)*100;
+      const rp=prices.slice(-365).map(p=>p[1]).reduce((a,b)=>a+b,0)/365;
+      vals.rvp=((btcPrice-rp)/rp)*100;
+      document.getElementById('price-display').textContent='BTC $'+btcPrice.toLocaleString(undefined,{maximumFractionDigits:0});
+      document.getElementById('realized-display').textContent='Realized proxy $'+Math.round(rp).toLocaleString();
+      window._btcPrice=btcPrice;window._realizedProxy=rp;
+      renderCards(vals);updateGauge(vals);
+    }).catch(()=>{});
+  });
   await Promise.all([p1,p2,p3,p4,p5]);
   updateGauge(vals);
   cacheCycle(vals,{source:'live'});
   document.getElementById('updated-display').textContent='Updated '+new Date().toLocaleTimeString();
   updateQuotaDisplay('next scheduled refresh: 8 AM / 8 PM PT');
+  if(bgErrors.length){
+    console.error('[BTC Score] BGeometrics issues:', bgErrors);
+    showBgError(bgErrors[0]);
+  }
 }
 
 async function startFetch(){
@@ -617,7 +668,9 @@ async function loadBrief(){
     const d=await r.json();btcP=d.bitcoin?.usd;ethP=d['ethereum']?.usd;btcChg=d.bitcoin?.usd_24h_change;ethChg=d['ethereum']?.usd_24h_change;
   }catch(e){}
   try{
-    const r=await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1500&interval=daily');
+    const cgUrl='/api/coingecko?path=coins%2Fbitcoin%2Fmarket_chart&vs_currency=usd&days=1500&interval=daily';
+    let r=await fetch(cgUrl);
+    if(!r.ok)r=await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1500&interval=daily');
     const d=await r.json();const prices=d.prices;
     ma200=prices.slice(-1400).map(p=>p[1]).reduce((a,b)=>a+b,0)/Math.min(1400,prices.length);
     rpProxy=prices.slice(-365).map(p=>p[1]).reduce((a,b)=>a+b,0)/365;
@@ -915,6 +968,33 @@ function importPortfolioCSV(e){
   };
   reader.readAsText(file);
 }
+
+// ── BGeometrics Debug ─────────────────────────────────────────────────────────
+async function showBgDebug(){
+  const panel=document.getElementById('bg-debug-panel');
+  const out=document.getElementById('bg-debug-output');
+  panel.style.display='block';
+  panel.scrollIntoView({behavior:'smooth'});
+  out.innerHTML='<p style="color:#5a5d8a;">Fetching 3 endpoints…</p>';
+  const eps=['mvrv-zscore','puell-multiple','nupl'];
+  const results=[];
+  for(const ep of eps){
+    try{
+      const r=await fetch(`/api/bgeometrics?endpoint=${encodeURIComponent(ep)}`);
+      const text=await r.text();
+      let parsed;try{parsed=JSON.parse(text);}catch(e){parsed=text;}
+      results.push({ep,status:r.status,ok:r.ok,body:parsed});
+    }catch(e){
+      results.push({ep,status:'network error',ok:false,body:e.message});
+    }
+  }
+  out.innerHTML=results.map(r=>`
+    <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #1a1c30;">
+      <div style="font-size:12px;color:${r.ok?'#1D9E75':'#E24B4A'};margin-bottom:6px;">${r.ep} — HTTP ${r.status}</div>
+      <pre style="font-size:10px;color:#7a7daa;white-space:pre-wrap;word-break:break-all;line-height:1.5;background:#07080f;padding:10px;border-radius:6px;border:1px solid #1a1c30;">${JSON.stringify(r.body,null,2).slice(0,800)}</pre>
+    </div>`).join('');
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── Live Screener ─────────────────────────────────────────────────────────────
 window._screenerData = {}; // symbol → {price, changePercent, name, ...}
