@@ -725,6 +725,21 @@ function updateGauge(vals){
   window._cycleScore={score:comp,color:c,label:zlbl(comp),inputs:vals}; try{renderOpportunities();renderPortfolio();}catch(e){}
 }
 
+function hydrateScoreFromCachedBg(){
+  const cachedVals=getCycleCache()?.vals||window._cycleScore?.inputs||{};
+  const vals={mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null,...cachedVals};
+  INDS.filter(i=>i.ep).forEach(i=>{
+    const cached=cachedBgMetric(i.id,i.ep);
+    if(cached)vals[i.id]=cached.value;
+  });
+  renderCards(vals);
+  updateGauge(vals);
+  cacheCycle(vals,{source:'cached-bg-debug'});
+  const upd=document.getElementById('updated-display');
+  if(upd)upd.textContent='Updated from BG debug cache '+new Date().toLocaleTimeString();
+  return vals;
+}
+
 function showBgError(msg){
   const el=document.getElementById('status-msg');
   if(el)el.textContent=msg;
@@ -920,10 +935,20 @@ const RESERVE_TOTAL=300000;
 const BASE_DCA={BTC:250,ETH:50};
 const WATCHLIST=[
   {ticker:'META',name:'Meta Platforms',type:'stock',drop:-6.0,reason:'Example: regulatory or reputation shock; classify whether ad engine/network effects remain intact',thesis:86,confidence:68,quality:90,newsSeverity:44,category:'Quality compounder'},
+  {ticker:'GOOGL',name:'Alphabet',type:'stock',drop:-5.0,reason:'Example: AI/search antitrust fear; check whether search distribution, cloud growth, and AI product momentum remain intact',thesis:84,confidence:66,quality:89,newsSeverity:46,category:'Quality compounder'},
+  {ticker:'AMZN',name:'Amazon',type:'stock',drop:-5.4,reason:'Example: retail margin or cloud growth scare; check AWS durability, ads growth, and fulfillment efficiency',thesis:85,confidence:65,quality:88,newsSeverity:42,category:'Cloud / consumer platform'},
+  {ticker:'MSFT',name:'Microsoft',type:'stock',drop:-4.8,reason:'Example: AI capex concern; check Azure share, Copilot adoption, and enterprise software durability',thesis:88,confidence:70,quality:92,newsSeverity:38,category:'Enterprise AI platform'},
+  {ticker:'ASML',name:'ASML Holding',type:'stock',drop:-6.2,reason:'Example: China restriction or semiconductor cycle fear; check EUV monopoly and long-term fab demand',thesis:86,confidence:63,quality:91,newsSeverity:48,category:'Semiconductor equipment'},
+  {ticker:'TSM',name:'Taiwan Semiconductor',type:'stock',drop:-5.7,reason:'Example: geopolitics or cycle selloff; check process leadership, AI demand, and customer concentration',thesis:84,confidence:60,quality:88,newsSeverity:52,category:'Semiconductor foundry'},
+  {ticker:'V',name:'Visa',type:'stock',drop:-5.0,reason:'Example: consumer slowdown or regulation fear; check payment volume, margins, and network durability',thesis:82,confidence:66,quality:89,newsSeverity:40,category:'Payments compounder'},
+  {ticker:'MA',name:'Mastercard',type:'stock',drop:-5.0,reason:'Example: cross-border or regulatory fear; check secular cash-to-card shift and pricing power',thesis:82,confidence:66,quality:89,newsSeverity:40,category:'Payments compounder'},
+  {ticker:'ISRG',name:'Intuitive Surgical',type:'stock',drop:-5.3,reason:'Example: procedure growth or margin concern; check installed base, recurring instruments, and robotics moat',thesis:83,confidence:62,quality:87,newsSeverity:42,category:'Healthcare compounder'},
   {ticker:'CPRT',name:'Copart',type:'stock',drop:-5.2,reason:'Example: temporary auto-cycle fear; check whether long-term salvage auction moat remains intact',thesis:84,confidence:64,quality:88,newsSeverity:36,category:'Under-the-radar compounder'},
   {ticker:'FIX',name:'Comfort Systems USA',type:'stock',drop:-5.5,reason:'Example: construction/margin selloff; check data center and mechanical services backlog',thesis:80,confidence:60,quality:82,newsSeverity:40,category:'Infrastructure beneficiary'},
   {ticker:'PWR',name:'Quanta Services',type:'stock',drop:-5.1,reason:'Example: utility/grid capex fear; check grid modernization backlog',thesis:82,confidence:62,quality:84,newsSeverity:38,category:'Grid modernization'},
   {ticker:'AXON',name:'Axon Enterprise',type:'stock',drop:-5.8,reason:'Example: valuation reset; check recurring software and public safety platform thesis',thesis:83,confidence:61,quality:85,newsSeverity:42,category:'Public safety / software'},
+  {ticker:'CRWD',name:'CrowdStrike',type:'stock',drop:-7.0,reason:'Example: outage, billings, or cybersecurity budget scare; check retention, platform breadth, and competitive position',thesis:76,confidence:56,quality:80,newsSeverity:58,category:'Cybersecurity'},
+  {ticker:'DDOG',name:'Datadog',type:'stock',drop:-6.4,reason:'Example: software growth scare; check cloud workload growth, net retention, and product expansion',thesis:74,confidence:55,quality:78,newsSeverity:52,category:'Cloud software'},
   {ticker:'TMDX',name:'TransMedics',type:'stock',drop:-7.0,reason:'Example: healthcare growth-stock selloff; check transplant logistics execution and margin path',thesis:72,confidence:55,quality:70,newsSeverity:50,category:'Emerging healthcare'}
 ];
 const EMERGING_LEADERS=[
@@ -932,6 +957,12 @@ const EMERGING_LEADERS=[
   {ticker:'AXON',name:'Axon Enterprise',theme:'Public safety software, devices, evidence cloud, AI-assisted policing workflow',leader:82,revenue:84,guidance:80,narrative:78,institutional:74,retail:48,entry:'Prefer valuation resets; thesis depends on recurring software expansion.',risk:'Valuation, public-sector budget cycles, controversy/regulation.'},
   {ticker:'TMDX',name:'TransMedics',theme:'Organ transplant logistics and medical device platform',leader:75,revenue:88,guidance:72,narrative:76,institutional:60,retail:58,entry:'Speculative growth leader candidate. Size smaller and require execution confirmation.',risk:'Execution, reimbursement, margin path.'},
   {ticker:'KTOS',name:'Kratos Defense',theme:'Drone warfare / autonomous defense systems / geopolitical rearmament',leader:74,revenue:70,guidance:68,narrative:86,institutional:58,retail:62,entry:'Watch political/defense budget catalysts and contract momentum; avoid chasing spikes.',risk:'Contract timing, defense budget cycles, profitability.'},
+  {ticker:'HWM',name:'Howmet Aerospace',theme:'Aerospace engine components / defense and commercial aircraft supply chain',leader:78,revenue:74,guidance:76,narrative:80,institutional:70,retail:30,entry:'Prefer pullbacks on aircraft delivery timing rather than margin or backlog deterioration.',risk:'Aerospace cycles, supply chain, customer concentration.'},
+  {ticker:'BWXT',name:'BWX Technologies',theme:'Nuclear components / naval reactors / energy security',leader:77,revenue:72,guidance:74,narrative:88,institutional:66,retail:36,entry:'Watch nuclear policy and defense budget catalysts; avoid chasing one-day policy spikes.',risk:'Government contracts, project timing, valuation.'},
+  {ticker:'VST',name:'Vistra',theme:'Power generation / grid load growth / data center electricity demand',leader:76,revenue:70,guidance:78,narrative:90,institutional:68,retail:54,entry:'Best after power-price or regulatory scares if cash flow outlook remains intact.',risk:'Commodity power prices, regulation, leverage.'},
+  {ticker:'ETN',name:'Eaton',theme:'Electrical equipment / grid modernization / data center power',leader:80,revenue:76,guidance:78,narrative:86,institutional:76,retail:42,entry:'Wait for industrial-cycle pullbacks; thesis depends on electrification backlog durability.',risk:'Industrial cyclicality, premium valuation, backlog normalization.'},
+  {ticker:'HUBB',name:'Hubbell',theme:'Utility components / grid hardening / electrification',leader:73,revenue:68,guidance:70,narrative:82,institutional:64,retail:24,entry:'Quiet compounder candidate; look for utility capex confirmation.',risk:'Utility capex timing, industrial demand.'},
+  {ticker:'XYL',name:'Xylem',theme:'Water infrastructure / measurement / municipal resilience',leader:72,revenue:66,guidance:70,narrative:84,institutional:62,retail:22,entry:'Best on municipal budget fear if orders and backlog stay healthy.',risk:'Municipal spending, integration risk, valuation.'},
   {ticker:'MWA',name:'Mueller Water Products',theme:'Water infrastructure replacement / municipal resilience',leader:69,revenue:62,guidance:66,narrative:78,institutional:52,retail:22,entry:'Early/quiet theme. Look for evidence of order acceleration from water infrastructure spend.',risk:'Municipal budgets, slow growth, cyclicality.'}
 ];
 
@@ -1301,7 +1332,19 @@ function sectorFor(symbol){
   const s=String(symbol||'').toUpperCase();
   if(assetClass(s)==='Cash')return 'Cash Reserve';
   if(assetClass(s)==='Bond / Cash-like')return 'Fixed Income';
-  const sectors={META:'Communication Services',GOOGL:'Communication Services',NFLX:'Communication Services',COST:'Consumer Defensive',AMZN:'Consumer Discretionary',TSLA:'Consumer Discretionary',RKLB:'Industrials / Space',PLTR:'Software / AI',SOFI:'Financials',CPRT:'Industrials',FIX:'Infrastructure',PWR:'Infrastructure',AXON:'Public Safety Software',TMDX:'Healthcare',KTOS:'Defense',MWA:'Water Infrastructure',NVDA:'Semiconductors',AVGO:'Semiconductors',MSFT:'Software / AI',AAPL:'Consumer Technology',BTC:'Crypto',ETH:'Crypto'}; 
+  const sectors={
+    META:'Communication Services',GOOGL:'Communication Services',GOOG:'Communication Services',NFLX:'Communication Services',DIS:'Communication Services',TMUS:'Communication Services',
+    COST:'Consumer Defensive',WMT:'Consumer Defensive',TGT:'Consumer Defensive',PG:'Consumer Defensive',KO:'Consumer Defensive',PEP:'Consumer Defensive',
+    AMZN:'Consumer Discretionary',TSLA:'Consumer Discretionary',HD:'Consumer Discretionary',LOW:'Consumer Discretionary',BKNG:'Consumer Discretionary',MELI:'Consumer Discretionary',LULU:'Consumer Discretionary',
+    JPM:'Financials',BAC:'Financials','BRK.B':'Financials','BRK.A':'Financials',V:'Payments / Financials',MA:'Payments / Financials',AXP:'Payments / Financials',SOFI:'Financials',COIN:'Crypto / Financials',
+    UNH:'Healthcare',LLY:'Healthcare',NVO:'Healthcare',JNJ:'Healthcare',ABBV:'Healthcare',ISRG:'Healthcare',TMDX:'Healthcare',
+    XOM:'Energy',CVX:'Energy',COP:'Energy',SLB:'Energy',
+    CAT:'Industrials',GE:'Industrials',HON:'Industrials',DE:'Industrials',CPRT:'Industrials',FIX:'Infrastructure',PWR:'Infrastructure',ETN:'Electrical Equipment',HUBB:'Electrical Equipment',HWM:'Aerospace',BWXT:'Nuclear / Defense',VST:'Power / Utilities',XYL:'Water Infrastructure',MWA:'Water Infrastructure',
+    NOC:'Defense',LMT:'Defense',RTX:'Defense',KTOS:'Defense',HEI:'Aerospace / Defense',
+    PLTR:'Software / AI',MSFT:'Software / AI',ORCL:'Software',CRM:'Software',NOW:'Software',ADBE:'Software',SNOW:'Cloud Software',DDOG:'Cloud Software',NET:'Cloud Software',CRWD:'Cybersecurity',PANW:'Cybersecurity',
+    AAPL:'Consumer Technology',NVDA:'Semiconductors',AVGO:'Semiconductors',AMD:'Semiconductors',ASML:'Semiconductor Equipment',TSM:'Semiconductor Foundry',LRCX:'Semiconductor Equipment',KLAC:'Semiconductor Equipment',MU:'Memory Semiconductors',
+    BTC:'Crypto',ETH:'Crypto',SOL:'Crypto'
+  }; 
   if(assetClass(s)==='ETF / Fund')return 'Diversified Fund';
   if(assetClass(s)==='Crypto')return 'Crypto';
   return sectors[s]||'Unclassified';
@@ -1310,7 +1353,17 @@ function themeFor(symbol){
   const s=String(symbol||'').toUpperCase();
   if(assetClass(s)==='Cash')return 'Dry powder / liquidity';
   if(assetClass(s)==='Bond / Cash-like')return 'Stability / income';
-  const themes={META:'AI ads / digital platforms',COST:'Defensive consumer compounder',RKLB:'Space infrastructure',PLTR:'AI software / data platforms',SOFI:'Fintech / consumer credit',BTC:'Digital scarcity / crypto reserve',ETH:'Smart contract rails',CPRT:'Under-the-radar compounder',FIX:'AI data center infrastructure',PWR:'Grid modernization',AXON:'Public safety software',TMDX:'Medical devices / logistics',KTOS:'Defense autonomy',MWA:'Water infrastructure',NVDA:'AI compute',AVGO:'AI networking / semis',MSFT:'AI software platform',AAPL:'Consumer ecosystem'};
+  const themes={
+    META:'AI ads / digital platforms',GOOGL:'AI search / cloud',GOOG:'AI search / cloud',AMZN:'AWS / commerce platform',MSFT:'AI software platform',AAPL:'Consumer ecosystem',
+    COST:'Defensive consumer compounder',WMT:'Defensive retail scale',HD:'Housing / home improvement',MELI:'Latin America commerce / fintech',BKNG:'Travel platform',
+    RKLB:'Space infrastructure',PLTR:'AI software / data platforms',SOFI:'Fintech / consumer credit',COIN:'Crypto rails',
+    BTC:'Digital scarcity / crypto reserve',ETH:'Smart contract rails',SOL:'High-throughput crypto apps',
+    CPRT:'Under-the-radar compounder',FIX:'AI data center infrastructure',PWR:'Grid modernization',ETN:'Electrification / power equipment',HUBB:'Grid hardening',VST:'Power demand / data centers',
+    AXON:'Public safety software',TMDX:'Medical devices / logistics',ISRG:'Surgical robotics',KTOS:'Defense autonomy',HWM:'Aerospace supply chain',BWXT:'Nuclear / naval reactors',
+    XYL:'Water infrastructure',MWA:'Water infrastructure',
+    NVDA:'AI compute',AVGO:'AI networking / semis',AMD:'AI compute challenger',ASML:'EUV semiconductor equipment',TSM:'Advanced chip manufacturing',LRCX:'Semicap equipment',KLAC:'Semicap process control',MU:'Memory cycle / AI bandwidth',
+    V:'Payments network',MA:'Payments network',CRWD:'Cybersecurity platform',PANW:'Cybersecurity platform',DDOG:'Cloud observability',NET:'Edge cloud / security',NOW:'Enterprise workflow software',SNOW:'Cloud data platform'
+  };
   if(assetClass(s)==='ETF / Fund')return 'Broad market exposure';
   return themes[s]||'Unclassified';
 }
@@ -1557,6 +1610,7 @@ async function showBgDebug(){
       ${r.cachedAt?`<div style="font-size:10px;color:#6a6d9a;margin-bottom:6px;">Using cached response from ${new Date(r.cachedAt).toLocaleString()} · parsed value ${r.value??'—'}</div>`:''}
       <pre style="font-size:10px;color:#7a7daa;white-space:pre-wrap;word-break:break-all;line-height:1.5;background:#07080f;padding:10px;border-radius:6px;border:1px solid #1a1c30;">${JSON.stringify(r.body,null,2).slice(0,800)}</pre>
     </div>`).join('');
+  try{hydrateScoreFromCachedBg();}catch(e){}
 }
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -2,19 +2,35 @@
 // Returns current price, % change from previous close, and volume for each symbol
 
 const DEFAULT_SYMBOLS = [
-  'META','CPRT','FIX','PWR','AXON','TMDX',   // core watchlist
-  'KTOS','MWA',                                 // emerging leaders
+  'META','GOOGL','AMZN','MSFT','ASML','TSM','V','MA','ISRG','CPRT','FIX','PWR','AXON','CRWD','DDOG','TMDX',
+  'KTOS','HWM','BWXT','VST','ETN','HUBB','XYL','MWA',
   'NVDA','GOOGL','AMZN','MSFT','AAPL'          // reference names
 ];
 
 const COMPANY_HINTS = {
   META: 'Meta Platforms',
+  GOOGL: 'Alphabet',
+  AMZN: 'Amazon',
+  MSFT: 'Microsoft',
+  ASML: 'ASML Holding',
+  TSM: 'Taiwan Semiconductor',
+  V: 'Visa',
+  MA: 'Mastercard',
+  ISRG: 'Intuitive Surgical',
   CPRT: 'Copart',
   FIX: 'Comfort Systems USA',
   PWR: 'Quanta Services',
   AXON: 'Axon Enterprise',
+  CRWD: 'CrowdStrike',
+  DDOG: 'Datadog',
   TMDX: 'TransMedics',
   KTOS: 'Kratos Defense',
+  HWM: 'Howmet Aerospace',
+  BWXT: 'BWX Technologies',
+  VST: 'Vistra',
+  ETN: 'Eaton',
+  HUBB: 'Hubbell',
+  XYL: 'Xylem',
   MWA: 'Mueller Water Products'
 };
 
