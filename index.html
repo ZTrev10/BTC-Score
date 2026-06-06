@@ -451,7 +451,7 @@ function numericFromRow(row, preferredKeys=[]){
     }
   }
   // Fallback: take a plausible metric field, but avoid percentile/risk/score fields.
-  const banned = /^(t|time|date|timestamp|unix|id|endpoint|fetchedat)$/i;
+  const banned = /^(d|t|time|date|timestamp|unix|unixts|id|endpoint|fetchedat)$/i;
   const avoid = /(percentile|rank|risk|score|signal|color|zone)/i;
   for(const k of Object.keys(row)){
     if(banned.test(k) || avoid.test(k)) continue;
@@ -465,8 +465,8 @@ function getMetricVal(id, payload){
   if(!rows.length) return null;
   const row = rows[rows.length-1];
   const preferred = {
-    mvrvZ:['mvrv_zscore','mvrv_z_score','mvrv_z','mvrvz','zscore','z_score','value','v'],
-    puell:['puell_multiple','puell','multiple','value','v'],
+    mvrvZ:['mvrvzscore','mvrv_zscore','mvrv_z_score','mvrv_z','mvrvz','zscore','z_score','value','v'],
+    puell:['puellmultiple','puell_multiple','puell','multiple','value','v'],
     nupl:['nupl','net_unrealized_profit_loss','value','v']
   }[id] || ['value','v'];
   const n = numericFromRow(row, preferred);
