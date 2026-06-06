@@ -176,6 +176,18 @@ td strong{color:#c8caee;font-weight:500;}
       <div id="score-breakdown" class="explain-body">Waiting for full indicator set. Fear & Greed alone is not the BTC Cycle Score.</div>
     </div>
 
+    <div class="card">
+      <p class="section-label">BTC / ETH CAPITAL DEPLOYMENT ENGINE</p>
+      <div class="score-mini">
+        <div class="score-mini-num" id="opp-cycle-score" style="color:#3a3d6a;">—</div>
+        <div>
+          <div id="opp-cycle-zone" style="font-size:12px;color:#6a6d9a;letter-spacing:0.12em;margin-bottom:4px;">LOAD BTC SCORE FIRST</div>
+          <div id="opp-deploy-note" style="font-size:11px;color:#5a5d8a;line-height:1.6;">Base DCA remains $250 BTC / $50 ETH. Reserve capital only activates when BTC Score is below 20 and BTC is 15–20% below recent high.</div>
+        </div>
+      </div>
+      <div id="reserve-ladder"></div>
+    </div>
+
     <div class="ind-grid" id="ind-grid"></div>
 
     <div class="card">
@@ -215,25 +227,33 @@ td strong{color:#c8caee;font-weight:500;}
 <div class="tab-content" id="tab-opportunities">
   <div class="brief-header">
     <div>
-      <p class="section-label">OPPORTUNITY RANKING</p>
-      <p style="font-size:11px;color:#3a3d6a;">Primary: Opportunity Score · Secondary: Buy / Watch / Avoid / Too Risky</p>
+      <p class="section-label">STOCK OPPORTUNITIES</p>
+      <p style="font-size:11px;color:#3a3d6a;">Stock-only · quality-on-sale framework · no BTC/ETH here</p>
     </div>
-    <button class="btn" onclick="renderOpportunities()">↻ Refresh Ranking</button>
+    <button class="btn" onclick="renderOpportunities()">↻ Refresh Framework</button>
   </div>
 
   <div class="card">
-    <p class="section-label">BTC RESERVE DEPLOYMENT ENGINE</p>
-    <div class="score-mini">
-      <div class="score-mini-num" id="opp-cycle-score" style="color:#3a3d6a;">—</div>
-      <div>
-        <div id="opp-cycle-zone" style="font-size:12px;color:#6a6d9a;letter-spacing:0.12em;margin-bottom:4px;">LOAD BTC SCORE FIRST</div>
-        <div id="opp-deploy-note" style="font-size:11px;color:#5a5d8a;line-height:1.6;">Base DCA remains $250 BTC / $50 ETH. Reserve capital only activates when BTC Score is below 20 and BTC is 15–20% below recent high.</div>
-      </div>
+    <p class="section-label">V2.2 TRUTH STATUS</p>
+    <div class="explain-body">This tab is currently a scoring framework with curated/example stock candidates. It is not yet a true market-wide discovery engine. A ticker should only become a real Opportunity after live price movement, current news, and thesis checks are connected.</div>
+  </div>
+
+  <div class="card">
+    <p class="section-label">HOW A STOCK MAKES THIS LIST</p>
+    <div class="detail-grid">
+      <div class="detail-box"><div class="detail-label">PRICE TRIGGER</div><div class="detail-text">Down 5%+ in a meaningful window, or down materially from a recent high.</div></div>
+      <div class="detail-box"><div class="detail-label">NEWS TRIGGER</div><div class="detail-text">The drop must map to identifiable bad news, not just random volatility.</div></div>
+      <div class="detail-box"><div class="detail-label">THESIS CHECK</div><div class="detail-text">The news must look temporary or non-thesis-breaking. Fraud, accounting issues, liquidity crises, or broken demand become Avoid/Too Risky.</div></div>
+      <div class="detail-box"><div class="detail-label">QUALITY FILTER</div><div class="detail-text">Preference for businesses with durable revenue, cash flow, moat, balance sheet strength, and long-term tailwinds.</div></div>
     </div>
-    <div id="reserve-ladder"></div>
   </div>
 
   <div id="opportunity-list"></div>
+
+  <div class="card">
+    <p class="section-label">NEXT DISCOVERY UPGRADE</p>
+    <div class="explain-body">Connect a price-mover feed + live news + fundamentals API. Until then, this tab should be read as a structured watchlist framework, not live recommendations.</div>
+  </div>
 
   <div class="card">
     <p class="section-label">FEATURE DECISIONS</p>
@@ -483,7 +503,7 @@ function renderScoreBreakdown(vals,comp=null){
   }).join('');
   const fg=vals.fg;
   const warning=(validMetricCount(vals)<4||bgMetricCount(vals)<2)
-    ? `<p style="font-size:11px;color:#BA7517;line-height:1.6;margin-bottom:10px;">Partial data loaded. Fear & Greed ${fg!==null&&!isNaN(fg)?`is ${Math.round(fg)} / 100, but it is only one input and should not be treated as the BTC Cycle Score.`:'has not loaded yet.'}</p>`
+    ? `<p style="font-size:11px;color:#BA7517;line-height:1.6;margin-bottom:10px;">Partial data loaded. BGeometrics on-chain metrics are required for the real BTC Cycle Score. Fear & Greed ${fg!==null&&!isNaN(fg)?`is ${Math.round(fg)} / 100, but it is only one input and should not be treated as the BTC Cycle Score.`:'has not loaded yet.'}</p>`
     : `<p style="font-size:11px;color:#5a5d8a;line-height:1.6;margin-bottom:10px;">BTC Cycle Score is the weighted composite of all loaded indicators. Fear & Greed is displayed separately below.</p>`;
   el.innerHTML=`${warning}<div class="table-wrap"><table><thead><tr><th>Indicator</th><th>Raw value</th><th>Indicator score</th><th>Weight</th><th>Weighted pts</th></tr></thead><tbody>${rows}</tbody></table></div><p style="font-size:10px;color:#3a3d6a;margin-top:8px;">Composite shown: ${comp===null?'not enough data yet':comp+' / 100'} · valid metrics: ${validMetricCount(vals)} / ${INDS.length} · BGeometrics metrics: ${bgMetricCount(vals)} / 3</p>`;
 }
@@ -519,9 +539,9 @@ async function refreshAll(){
   const vals={mvrvZ:null,puell:null,nupl:null,rvp:null,fg:null,ma:null};
   renderCards(vals);
   let btcPrice=null;
-  const p1=bgCall('mvrv-zscore').then(d=>{vals.mvrvZ=getVal(d);renderCards(vals);updateGauge(vals);}).catch(()=>{});
-  const p2=bgCall('puell-multiple').then(d=>{vals.puell=getVal(d);renderCards(vals);updateGauge(vals);}).catch(()=>{});
-  const p3=bgCall('nupl').then(d=>{vals.nupl=getVal(d);renderCards(vals);updateGauge(vals);}).catch(()=>{});
+  const p1=bgCall('mvrv-zscore').then(d=>{vals.mvrvZ=getVal(d);renderCards(vals);updateGauge(vals);}).catch(e=>{vals._bgError=e.message||'MVRV failed';});
+  const p2=bgCall('puell-multiple').then(d=>{vals.puell=getVal(d);renderCards(vals);updateGauge(vals);}).catch(e=>{vals._bgError=e.message||'Puell failed';});
+  const p3=bgCall('nupl').then(d=>{vals.nupl=getVal(d);renderCards(vals);updateGauge(vals);}).catch(e=>{vals._bgError=e.message||'NUPL failed';});
   const p4=fetch('https://api.alternative.me/fng/?limit=1').then(r=>r.json()).then(d=>{vals.fg=parseInt(d.data[0].value);renderCards(vals);updateGauge(vals);}).catch(()=>{});
   const p5=fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=400&interval=daily').then(r=>r.json()).then(d=>{
     const prices=d.prices;btcPrice=prices[prices.length-1][1];
@@ -537,9 +557,19 @@ async function refreshAll(){
   }).catch(()=>{});
   await Promise.all([p1,p2,p3,p4,p5]);
   updateGauge(vals);
-  cacheCycle(vals,{source:'live'});
+  if(bgMetricCount(vals)<2){showCycleError(vals._bgError||'BGeometrics proxy returned fewer than 2 on-chain metrics.');}
+  else {cacheCycle(vals,{source:'live'});} 
   document.getElementById('updated-display').textContent='Updated '+new Date().toLocaleTimeString();
   updateQuotaDisplay('next scheduled refresh: 8 AM / 8 PM PT');
+}
+
+function showCycleError(message){
+  const el=document.getElementById('score-num'); if(el){el.textContent='—';el.style.color='#3a3d6a';}
+  const lbl=document.getElementById('score-lbl'); if(lbl){lbl.textContent='BGEOMETRICS DATA NEEDED';lbl.style.color='#BA7517';}
+  const upd=document.getElementById('updated-display'); if(upd)upd.textContent='BTC Score unavailable';
+  const sb=document.getElementById('score-breakdown');
+  if(sb)sb.innerHTML=`<p style="font-size:11px;color:#BA7517;line-height:1.7;margin-bottom:10px;">${esc(message||'BGeometrics proxy did not return enough data.')} The app will not show Fear & Greed as the BTC Cycle Score. Add <strong>BGEOMETRICS_API_KEY</strong> in Vercel, redeploy, then click Force Refresh or wait for the 8 AM / 8 PM PT refresh window.</p>`;
+  window._cycleScore=null;
 }
 
 async function startFetch(){
@@ -548,7 +578,7 @@ async function startFetch(){
   const status=document.getElementById('status-msg');
   if(status)status.textContent='';
   updateQuotaDisplay('smart cache active: 8 AM / 8 PM PT');
-  try{await smartRefreshCycle(false);}catch(e){if(status)status.textContent='Connection/auth error. Cached data will be used when available.';applyCycleCache();}
+  try{await smartRefreshCycle(false);}catch(e){if(status)status.textContent='Connection/auth error. Cached data will be used when available.'; if(!applyCycleCache()) showCycleError(e.message||'Connection/auth error.');}
 }
 function resetKey(){startFetch();}
 
@@ -691,7 +721,7 @@ const EMERGING_LEADERS=[
 ];
 
 const FEATURES=[
-  {name:'Opportunity Feed',status:'YES',body:'Ranks BTC, ETC, and watchlist stocks by Opportunity Score. Surfaces only useful buy/watch/avoid candidates rather than ticker noise.',data:'Live price, 24h/7d change, confirmed news trigger, cycle score, watchlist fundamentals.',difficulty:'Medium'},
+  {name:'Opportunity Feed',status:'YES',body:'Ranks stock watchlist candidates by Opportunity Score. BTC/ETH are handled only inside the BTC Score tab.',data:'Live price, 24h/7d change, confirmed news trigger, cycle score, watchlist fundamentals.',difficulty:'Medium'},
   {name:'Why Is It Down?',status:'YES',body:'Expandable explanation of the bad news, how much the asset is down, and whether the drop appears temporary or thesis-breaking.',data:'News feed + price move + confidence tagging.',difficulty:'Medium'},
   {name:'Thesis Integrity Score',status:'YES',body:'Separates a normal panic selloff from a business/model impairment. For stocks, this should consider growth, FCF, debt, moat, valuation, and management credibility.',data:'Fundamental snapshots and manual watchlist assumptions in V1.',difficulty:'Medium'},
   {name:'Confidence Score',status:'YES',body:'Shows how reliable the recommendation is. A high Opportunity Score with low confidence should become Watch, not Buy.',data:'News quality, consistency across sources, price move magnitude, historical precedent.',difficulty:'Medium'},
@@ -719,11 +749,9 @@ function deploymentForScore(score){
   return {zone:'MAXIMUM OPPORTUNITY',amount:120000,percent:40,copy:'Score below 5. Deploy remaining reserve tranche, assuming no structural BTC thesis break.'};
 }
 function opportunityScore(item){
-  const cycle=currentCycleScore();
   const dropScore=Math.min(100,Math.max(0,Math.abs(item.drop)*8));
-  const cycleBoost=item.type==='crypto'&&cycle!==null ? Math.max(0,100-cycle*3) : 55;
   const newsOpportunity=Math.max(0,100-item.newsSeverity);
-  return Math.round(dropScore*0.20 + item.quality*0.25 + item.thesis*0.25 + item.confidence*0.15 + (item.type==='crypto'?cycleBoost:newsOpportunity)*0.15);
+  return Math.round(dropScore*0.20 + item.quality*0.30 + item.thesis*0.25 + item.confidence*0.15 + newsOpportunity*0.10);
 }
 function renderReserveLadder(){
   const score=currentCycleScore();
@@ -735,7 +763,7 @@ function renderReserveLadder(){
   document.getElementById('opp-cycle-score').style.color=score===null?'#3a3d6a':col(score);
   document.getElementById('opp-cycle-zone').textContent=d.zone;
   document.getElementById('opp-cycle-zone').style.color=score===null?'#6a6d9a':col(score);
-  document.getElementById('opp-deploy-note').innerHTML=`Base DCA: <strong style="color:#c8caee;">$${BASE_DCA.BTC} BTC / $${BASE_DCA.ETH} ETC</strong>. ${d.copy} Suggested reserve deploy now: <strong style="color:#c8caee;">${money(d.amount)}</strong>.`;
+  document.getElementById('opp-deploy-note').innerHTML=`Base DCA: <strong style="color:#c8caee;">$${BASE_DCA.BTC} BTC / $${BASE_DCA.ETH} ETH</strong>. ${d.copy} Suggested reserve deploy now: <strong style="color:#c8caee;">${money(d.amount)}</strong>.`;
   document.getElementById('reserve-ladder').innerHTML=rows.map(r=>{
     const active=(score!==null&&((r[0]==='>20'&&score>20)||(r[0]==='15–20'&&score<=20&&score>15)||(r[0]==='10–15'&&score<=15&&score>10)||(r[0]==='5–10'&&score<=10&&score>5)||(r[0]==='<5'&&score<=5)));
     return `<div class="ladder-row ${active?'active':''}"><strong>${r[0]}</strong><span>${r[1]}</span><span>${r[2]}</span></div>`;
@@ -743,7 +771,6 @@ function renderReserveLadder(){
 }
 function toggleCard(el){el.closest('.op-card').classList.toggle('open');}
 function renderOpportunities(){
-  renderReserveLadder();
   const sorted=[...WATCHLIST].map(i=>({...i,score:opportunityScore(i)})).sort((a,b)=>b.score-a.score);
   document.getElementById('opportunity-list').innerHTML=sorted.map(item=>{
     const a=actionFor(item.score,item.thesis,item.confidence);
@@ -764,7 +791,7 @@ function renderOpportunities(){
           <div class="detail-box"><div class="detail-label">NEWS CLASSIFICATION</div><div class="detail-text">${esc(item.classification||'Unclassified')} · Temporary fear can be opportunity; structural threat requires caution; thesis breaker means avoid.</div></div>
           <div class="detail-box"><div class="detail-label">THESIS IMPACT</div><div class="detail-text">${item.thesis}/100 · ${esc(item.thesisImpact || (item.thesis>=80?'Thesis appears intact.':item.thesis>=60?'Some risk; monitor before sizing up.':'Potential impairment; avoid or keep small.'))}</div></div>
           <div class="detail-box"><div class="detail-label">CONFIDENCE</div><div class="detail-text">${item.confidence}/100 · Based on signal strength, price move, news severity, and whether the business engine is actually impaired.</div></div>
-          <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text">Primary ranking is Opportunity Score. Secondary action is ${a.label}. For BTC/ETC, reserve capital requires BTC Score below 20 plus a 15–20% drawdown from recent high.</div></div>
+          <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text">Primary ranking is Opportunity Score. Secondary action is ${a.label}. BTC/ETH reserve capital is handled only in the BTC Score tab.</div></div>
         </div>
       </div>
     </div>`;
@@ -1022,7 +1049,7 @@ function importPortfolioCSV(e){
 window.addEventListener('DOMContentLoaded',()=>{
   try{document.getElementById('brief-date').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});}catch(e){}
   try{updateQuotaDisplay('smart cache active: 8 AM / 8 PM PT');}catch(e){}
-  try{applyCycleCache();}catch(e){}
+  try{if(!applyCycleCache()) startFetch();}catch(e){try{showCycleError(e.message||'BTC Score could not load.');}catch(_){}}
   try{renderOpportunities();}catch(e){}
   try{renderEmergingLeaders();}catch(e){}
   try{renderPortfolio();}catch(e){}
