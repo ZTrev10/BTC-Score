@@ -92,6 +92,11 @@ td strong{color:#c8caee;font-weight:500;}
 .ladder-row:last-child{border-bottom:none;}
 .ladder-row.active{color:#c8caee;}
 .ladder-row.active strong{color:#1D9E75;}
+.research-score-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:12px 0;}
+.research-score{background:#07080f;border:1px solid #1a1c30;border-radius:8px;padding:10px;}
+.research-score-num{font-family:'Bebas Neue',sans-serif;font-size:38px;line-height:0.95;}
+.research-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.textarea-input{width:100%;min-height:74px;resize:vertical;padding:10px;background:#07080f;border:1px solid #2a2d50;border-radius:8px;color:#c8caee;font-family:'DM Mono',monospace;font-size:12px;line-height:1.55;outline:none;}
 
 </style>
 </head>
@@ -102,8 +107,10 @@ td strong{color:#c8caee;font-weight:500;}
   <div class="tab active" onclick="switchTab('brief')">📰 DAILY BRIEF</div>
   <div class="tab" onclick="switchTab('cycle')">₿ BTC SCORE</div>
   <div class="tab" onclick="switchTab('opportunities')">🎯 OPPORTUNITIES</div>
+  <div class="tab" onclick="switchTab('research')">🔎 RESEARCH</div>
   <div class="tab" onclick="switchTab('emerging')">🚀 EMERGING LEADERS</div>
   <div class="tab" onclick="switchTab('portfolio')">📊 PORTFOLIO</div>
+  <div class="tab" onclick="switchTab('memory')">🧠 MEMORY</div>
 </div>
 
 <!-- ═══════════════ DAILY BRIEF TAB ═══════════════ -->
@@ -232,6 +239,48 @@ td strong{color:#c8caee;font-weight:500;}
 
 
 
+<!-- ═══════════════ RESEARCH TAB ═══════════════ -->
+<div class="tab-content" id="tab-research">
+  <div class="brief-header">
+    <div>
+      <p class="section-label">RESEARCH ANY TICKER</p>
+      <p style="font-size:11px;color:#3a3d6a;">V1 decision engine · built for next-dollar allocation, not trading</p>
+    </div>
+    <button class="btn" onclick="clearResearchHistory()">Clear History</button>
+  </div>
+
+  <div class="card">
+    <p class="section-label">TICKER CHECK</p>
+    <div class="form-grid">
+      <input class="small-input" id="research-symbol" placeholder="Ticker e.g. META, COST, RKLB" onkeydown="if(event.key==='Enter')runResearch()">
+      <select class="small-input" id="research-context">
+        <option value="new">New money</option>
+        <option value="owned">Already own it</option>
+        <option value="sell">Considering selling</option>
+      </select>
+      <select class="small-input" id="research-horizon">
+        <option value="long">5+ year compounder</option>
+        <option value="medium">1-3 year thesis</option>
+        <option value="spec">Speculative sleeve</option>
+      </select>
+    </div>
+    <textarea class="textarea-input" id="research-notes" placeholder="Optional notes: valuation worry, recent news, position size, why you care..."></textarea>
+    <div class="research-actions">
+      <button class="btn" onclick="runResearch()">Analyze Ticker</button>
+      <button class="btn" onclick="saveCurrentResearch()">Save Snapshot</button>
+    </div>
+    <div class="status" id="research-status"></div>
+  </div>
+
+  <div id="research-output"></div>
+
+  <div class="card">
+    <p class="section-label">RESEARCH HISTORY</p>
+    <div id="research-history" class="explain-body">No saved research yet.</div>
+  </div>
+</div>
+
+
 <!-- ═══════════════ OPPORTUNITIES TAB ═══════════════ -->
 <div class="tab-content" id="tab-opportunities">
   <div class="brief-header">
@@ -299,7 +348,7 @@ td strong{color:#c8caee;font-weight:500;}
 
   <div class="card">
     <p class="section-label">IMPORT PORTFOLIO CSV</p>
-    <p style="font-size:11px;color:#5a5d8a;line-height:1.7;margin-bottom:8px;">Export positions from Fidelity as CSV, then upload here. The importer looks for common columns like Symbol, Quantity, Cost Basis, Current Value, Last Price, and Description.</p>
+    <p style="font-size:11px;color:#5a5d8a;line-height:1.7;margin-bottom:8px;">Export positions from Fidelity as CSV, then upload here. The parser reads Symbol, Description, Quantity, Last Price, Current Value, Cost Basis Total, Average Cost Basis, and Account Name. Fidelity footnotes and disclaimers are ignored; cash-like rows are separated.</p>
     <input class="file-input" type="file" id="portfolio-csv" accept=".csv,text/csv" onchange="importPortfolioCSV(event)">
     <div class="status" id="csv-status"></div>
   </div>
@@ -311,19 +360,85 @@ td strong{color:#c8caee;font-weight:500;}
       <input class="small-input" id="h-qty" type="number" step="any" placeholder="Quantity">
       <input class="small-input" id="h-cost" type="number" step="any" placeholder="Avg cost">
       <input class="small-input" id="h-price" type="number" step="any" placeholder="Current price">
+      <select class="small-input" id="h-account">
+        <option value="Taxable">Taxable</option>
+        <option value="Retirement">Retirement</option>
+        <option value="Crypto">Crypto</option>
+      </select>
     </div>
     <button class="btn" onclick="addHolding()">Add / Update Holding</button>
   </div>
 
   <div class="card">
-    <p class="section-label">PORTFOLIO HEALTH</p>
+    <p class="section-label">MASTER PORTFOLIO</p>
     <div id="portfolio-summary"></div>
+    <div class="research-actions">
+      <button class="btn" onclick="analyzePortfolio()">Analyze Master Portfolio</button>
+    </div>
     <div class="table-wrap"><table id="portfolio-table"></table></div>
+  </div>
+
+  <div class="card">
+    <p class="section-label">PORTFOLIO ANALYSIS</p>
+    <div id="portfolio-analysis" class="explain-body">Click Analyze Master Portfolio after loading holdings.</div>
+  </div>
+
+  <div class="card">
+    <p class="section-label">DRILL-DOWN</p>
+    <div id="portfolio-drilldown"></div>
   </div>
 
   <div class="card">
     <p class="section-label">PORTFOLIO-AWARE STRATEGY</p>
     <div id="portfolio-strategy" class="explain-body">Add holdings or import a CSV to generate position-aware suggestions.</div>
+  </div>
+</div>
+
+<!-- ═══════════════ MEMORY TAB ═══════════════ -->
+<div class="tab-content" id="tab-memory">
+  <div class="brief-header">
+    <div>
+      <p class="section-label">MEMORY / SNAPSHOTS</p>
+      <p style="font-size:11px;color:#3a3d6a;">Local historical database v1 · the future Airtable shape starts here</p>
+    </div>
+    <button class="btn" onclick="clearMemorySnapshots()">Clear Memory</button>
+  </div>
+
+  <div class="card">
+    <p class="section-label">SAVE DAILY SNAPSHOT</p>
+    <div class="form-grid">
+      <select class="small-input" id="memory-event-type">
+        <option value="Normal Market">Normal Market</option>
+        <option value="Regulatory">Regulatory</option>
+        <option value="Rates">Rates</option>
+        <option value="Earnings">Earnings</option>
+        <option value="AI Infrastructure">AI Infrastructure</option>
+        <option value="Crypto Panic">Crypto Panic</option>
+        <option value="Credit Stress">Credit Stress</option>
+        <option value="Geopolitical">Geopolitical</option>
+      </select>
+      <select class="small-input" id="memory-filter" onchange="renderMemorySnapshots()">
+        <option value="all">All event types</option>
+        <option value="Normal Market">Normal Market</option>
+        <option value="Regulatory">Regulatory</option>
+        <option value="Rates">Rates</option>
+        <option value="Earnings">Earnings</option>
+        <option value="AI Infrastructure">AI Infrastructure</option>
+        <option value="Crypto Panic">Crypto Panic</option>
+        <option value="Credit Stress">Credit Stress</option>
+        <option value="Geopolitical">Geopolitical</option>
+      </select>
+    </div>
+    <textarea class="textarea-input" id="memory-notes" placeholder="What happened today? Example: BTC rate-limit issue, AI capex selloff, regulatory fear, portfolio rebalance idea..."></textarea>
+    <div class="research-actions">
+      <button class="btn" onclick="saveDailySnapshot()">Save Daily Snapshot</button>
+    </div>
+    <div class="status" id="memory-status"></div>
+  </div>
+
+  <div class="card">
+    <p class="section-label">SNAPSHOT HISTORY</p>
+    <div id="memory-list" class="explain-body">No snapshots saved yet.</div>
   </div>
 </div>
 
@@ -519,7 +634,9 @@ function switchTab(t){
   if(t==='brief'&&document.getElementById('brief-content').style.display==='none')loadBrief();
   if(t==='cycle')smartRefreshCycle(false);
   if(t==='opportunities')loadScreener();
+  if(t==='research'){loadScreener();renderResearchHistory();}
   if(t==='emerging')loadScreener();
+  if(t==='memory')renderMemorySnapshots();
 }
 
 async function bgCall(ep){
@@ -818,6 +935,22 @@ const EMERGING_LEADERS=[
   {ticker:'MWA',name:'Mueller Water Products',theme:'Water infrastructure replacement / municipal resilience',leader:69,revenue:62,guidance:66,narrative:78,institutional:52,retail:22,entry:'Early/quiet theme. Look for evidence of order acceleration from water infrastructure spend.',risk:'Municipal budgets, slow growth, cyclicality.'}
 ];
 
+const RESEARCH_HISTORY_KEY='trevor_research_history_v1';
+const MEMORY_SNAPSHOTS_KEY='trevor_memory_snapshots_v1';
+const RESEARCH_PROFILES={
+  META:{name:'Meta Platforms',type:'Quality compounder',fundamental:90,thesis:86,valuation:68,macro:72,opportunity:70,summary:'Scaled ad network plus AI-enabled engagement and efficiency. Best when regulatory or reputation fear creates a valuation reset without breaking the core ad engine.',bull:'AI improves ad targeting, Reels monetization continues, WhatsApp and business messaging become larger profit pools, and Reality Labs losses stay contained.',bear:'Regulation, platform fatigue, capex intensity, or a failed metaverse/AI spending cycle could compress margins and multiple.',valuation:'Usually worth owning only with discipline. Strong business quality can justify a premium, but the best entries come after fear-driven drawdowns.',macro:'Sensitive to consumer ads, regulation, AI capex, and broad risk appetite.',risks:'Regulatory shocks, privacy changes, AI infrastructure spend, management capital allocation.'},
+  COST:{name:'Costco',type:'Defensive compounder',fundamental:92,thesis:88,valuation:45,macro:78,opportunity:54,summary:'Exceptional membership model and customer loyalty. Usually a great business, but the stock often prices in that greatness.',bull:'Membership fee increases, traffic resilience, private label strength, and international growth keep compounding earnings.',bear:'Valuation can do most of the damage. If growth slows, even a wonderful business can underperform from a high multiple.',valuation:'Quality is obvious, so margin of safety is usually thin. Prefer adding on rare multiple compression.',macro:'Defensive in weak consumer environments, but not immune to wage, freight, or valuation pressure.',risks:'Premium valuation, slower same-store sales, margin pressure, limited surprise factor.'},
+  RKLB:{name:'Rocket Lab',type:'Speculative space infrastructure',fundamental:55,thesis:70,valuation:42,macro:52,opportunity:58,summary:'High-upside space infrastructure candidate with real technology and execution, but still speculative and sensitive to capital markets.',bull:'Launch cadence improves, space systems scale, Neutron expands the addressable market, and government/commercial demand rises.',bear:'Execution delays, funding needs, launch failures, or lower risk appetite can hurt the stock sharply.',valuation:'Hard to anchor with traditional metrics. Position sizing matters more than precision.',macro:'Sensitive to rates, defense/space budgets, and speculative growth appetite.',risks:'Execution, dilution, launch reliability, customer concentration, long path to durable cash flow.'},
+  PLTR:{name:'Palantir',type:'AI/data platform',fundamental:78,thesis:82,valuation:35,macro:72,opportunity:50,summary:'Strong AI and government/commercial data platform narrative. The core question is whether growth can justify a demanding valuation.',bull:'AIP adoption accelerates, commercial growth compounds, government remains sticky, and operating leverage expands.',bear:'Expectations are high. Any slowdown, margin disappointment, or AI narrative fatigue can compress the multiple.',valuation:'Often the gating issue. Great story does not automatically mean attractive next-dollar entry.',macro:'Benefits from AI adoption, defense/government demand, and enterprise automation budgets.',risks:'Valuation, concentration, political controversy, growth expectations.'},
+  SOFI:{name:'SoFi Technologies',type:'Consumer fintech / bank',fundamental:62,thesis:66,valuation:58,macro:48,opportunity:57,summary:'Fintech-bank hybrid with growth potential, but more macro-sensitive than a pure software compounder.',bull:'Member growth, cross-sell, deposit funding advantage, and profitability improvements continue.',bear:'Credit cycle, loan losses, rates, or funding pressure can quickly change the thesis.',valuation:'Can look attractive after financial-sector fear, but needs credit quality confirmation.',macro:'Highly tied to rates, employment, consumer credit, and risk appetite.',risks:'Credit losses, regulation, funding costs, student loan cycle, bank multiple compression.'},
+  BTC:{name:'Bitcoin',type:'Monetary network',fundamental:78,thesis:84,valuation:60,macro:56,opportunity:65,summary:'Long-duration monetary asset. For this app, BTC buying should be governed by cycle score, drawdown, and reserve ladder rather than headlines alone.',bull:'ETF adoption, monetary debasement narrative, institutional allocation, and fixed supply support the long-term thesis.',bear:'Regulation, liquidity tightening, custody failures, or cycle euphoria can drive deep drawdowns.',valuation:'Use BTC Score and reserve ladder. Avoid treating sentiment alone as a score.',macro:'Sensitive to liquidity, real rates, dollar strength, and risk appetite.',risks:'Cycle risk, regulation, custody/security, leverage flushes.'},
+  ETH:{name:'Ethereum',type:'Smart contract settlement layer',fundamental:70,thesis:72,valuation:56,macro:54,opportunity:58,summary:'Higher execution and competition risk than BTC, but broader application exposure. Size relative to conviction.',bull:'L2 growth, stablecoins, tokenization, staking economics, and developer mindshare support the thesis.',bear:'Fee compression, competition, regulatory ambiguity, or weak app demand can limit upside.',valuation:'Needs a discount for complexity and competitive risk. Best entries usually follow crypto-wide fear.',macro:'Sensitive to liquidity, risk appetite, regulation, and crypto application demand.',risks:'Competition, regulation, execution complexity, unclear value capture.'}
+};
+const RESEARCH_SCORE_DEFAULTS={
+  META:{valuation:68,macro:72},COST:{valuation:45,macro:78},RKLB:{valuation:42,macro:52},
+  PLTR:{valuation:35,macro:72},SOFI:{valuation:58,macro:48},BTC:{valuation:60,macro:56},ETH:{valuation:56,macro:54}
+};
+
 const FEATURES=[
   {name:'Opportunity Feed',status:'YES',body:'Ranks BTC, ETH, and watchlist stocks by Opportunity Score. Surfaces only useful buy/watch/avoid candidates rather than ticker noise.',data:'Live price, 24h/7d change, confirmed news trigger, cycle score, watchlist fundamentals.',difficulty:'Medium'},
   {name:'Why Is It Down?',status:'YES',body:'Expandable explanation of the bad news, how much the asset is down, and whether the drop appears temporary or thesis-breaking.',data:'News feed + price move + confidence tagging.',difficulty:'Medium'},
@@ -961,32 +1094,202 @@ function renderEmergingLeaders(){
   }).join('');
 }
 
-function portfolio(){try{return JSON.parse(localStorage.getItem('portfolioHoldings')||'[]');}catch(e){return [];}}
-function savePortfolio(rows){localStorage.setItem('portfolioHoldings',JSON.stringify(rows));renderPortfolio();}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function clamp(n,min=0,max=100){return Math.max(min,Math.min(max,Number(n)||0));}
+function researchHistory(){try{return JSON.parse(localStorage.getItem(RESEARCH_HISTORY_KEY)||'[]');}catch(e){return [];}}
+function saveResearchHistory(rows){localStorage.setItem(RESEARCH_HISTORY_KEY,JSON.stringify(rows.slice(0,25)));renderResearchHistory();}
+function researchProfile(symbol){
+  const sym=String(symbol||'').trim().toUpperCase();
+  const watch=WATCHLIST.find(x=>x.ticker===sym);
+  const emerging=EMERGING_LEADERS.find(x=>x.ticker===sym);
+  const known=RESEARCH_PROFILES[sym];
+  if(known)return {ticker:sym,...known};
+  if(watch)return {ticker:sym,name:watch.name,type:watch.category,fundamental:watch.quality,thesis:watch.thesis,valuationScore:58,macroScore:60,opportunity:opportunityScore(watch),summary:`Known watchlist company in ${watch.category}. V1 uses watchlist assumptions until full fundamentals are connected.`,bull:'Quality and thesis assumptions are strong enough to keep it on the buyable watchlist.',bear:'Live fundamentals are not connected yet, so confidence should stay moderate until verified.',valuationText:'Treat valuation as neutral until research data is connected.',macroText:'Macro exposure depends on the company theme and current market regime.',risks:watch.reason};
+  if(emerging)return {ticker:sym,name:emerging.name,type:emerging.theme,fundamental:emerging.revenue,thesis:emerging.leader,valuationScore:52,macroScore:emerging.narrative,opportunity:emergingAction(emerging).label==='WATCH CLOSELY'?68:58,summary:`Emerging leader candidate tied to ${emerging.theme}.`,bull:'Theme strength and revenue/guidance signals could compound if the trend becomes durable.',bear:'Emerging leaders can be expensive, cyclical, or early. Require execution confirmation.',valuationText:emerging.entry,macroText:`Narrative strength ${emerging.narrative}/100.`,risks:emerging.risk};
+  return {ticker:sym,name:sym,type:'Unclassified ticker',fundamental:55,thesis:50,valuationScore:50,macroScore:50,opportunity:45,summary:'No local profile yet. V1 can still create a research shell, but this needs manual notes or future fundamentals integration.',bull:'Unknown until company quality, growth, margins, balance sheet, and moat are researched.',bear:'Unknown businesses should not receive new capital without a clear thesis and valuation work.',valuationText:'No valuation data connected yet.',macroText:'Macro exposure unknown.',risks:'Missing research profile. Add notes before making a decision.'};
+}
+function researchDecision(score,context){
+  if(score>=82)return {label:'BUY TODAY',color:'#1D9E75',copy:'Strong next-dollar candidate if position size and valuation discipline are acceptable.'};
+  if(score>=70)return {label:'ADD / ACCUMULATE',color:'#639922',copy:'Good candidate, especially on weakness or if underweight.'};
+  if(score>=58)return {label:context==='owned'?'KEEP / HOLD':'WATCHLIST',color:'#BA7517',copy:'Interesting, but wait for better price, clearer evidence, or stronger thesis confirmation.'};
+  if(score>=45)return {label:context==='sell'?'REDUCE CANDIDATE':'HOLD OFF',color:'#E24B4A',copy:'Not the best home for the next dollar right now.'};
+  return {label:'AVOID / EXIT REVIEW',color:'#A32D2D',copy:'Weak score. Require a major thesis change before adding capital.'};
+}
+function buildResearch(symbol){
+  const profile=researchProfile(symbol);
+  const defaults=RESEARCH_SCORE_DEFAULTS[profile.ticker]||{};
+  const valuationScore=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:defaults.valuation??50));
+  const macroScore=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:defaults.macro??50));
+  const valuationText=profile.valuationText??(typeof profile.valuation==='string'?profile.valuation:'Valuation data is not connected yet. Treat this as a neutral placeholder.');
+  const macroText=profile.macroText??(typeof profile.macro==='string'?profile.macro:'Macro exposure needs manual review until live fundamentals are connected.');
+  const q=window._screenerData?.[profile.ticker]||null;
+  const liveDrop=q?.changePercent??liveChangeFor(profile.ticker);
+  const price=q?.price??livePriceFor(profile.ticker);
+  const notes=document.getElementById('research-notes')?.value||'';
+  const context=document.getElementById('research-context')?.value||'new';
+  const horizon=document.getElementById('research-horizon')?.value||'long';
+  const dropBoost=liveDrop<0?Math.min(12,Math.abs(liveDrop)*1.4):Math.max(-8,-Math.abs(liveDrop||0)*0.8);
+  const specPenalty=horizon==='spec'?0:profile.fundamental<60?-8:0;
+  const score=Math.round(clamp(profile.fundamental*0.25+profile.thesis*0.25+valuationScore*0.18+macroScore*0.12+profile.opportunity*0.20+dropBoost+specPenalty));
+  const decision=researchDecision(score,context);
+  const bestAlt=rankedOpportunities().find(x=>x.ticker!==profile.ticker);
+  return {...profile,valuationScore,macroScore,valuationText,macroText,score,decision,price,liveDrop,notes,context,horizon,bestAlt,createdAt:new Date().toISOString()};
+}
+function renderResearchCard(r){
+  const scores=[
+    ['Fundamental',r.fundamental],['Thesis',r.thesis],['Valuation',r.valuationScore],['Macro',r.macroScore],['Opportunity',r.opportunity]
+  ].map(([label,val])=>`<div class="research-score"><div class="detail-label">${label.toUpperCase()}</div><div class="research-score-num" style="color:${col(val)};">${Math.round(val)}</div></div>`).join('');
+  const priceLine=r.price?`$${Number(r.price).toLocaleString(undefined,{maximumFractionDigits:2})}`:'Price unavailable';
+  const moveLine=r.liveDrop!=null?`${r.liveDrop>=0?'+':''}${Number(r.liveDrop).toFixed(1)}% recent move`:'No live move available';
+  const alt=r.bestAlt?`${r.bestAlt.ticker} (${researchDecision(r.bestAlt.score,'new').label}, score ${r.bestAlt.score})`:'cash / wait';
+  document.getElementById('research-output').innerHTML=`<div class="card">
+    <p class="section-label">WOULD I BUY THIS TODAY?</p>
+    <div class="score-mini">
+      <div class="score-mini-num" style="color:${r.decision.color};">${r.score}</div>
+      <div>
+        <div style="font-size:13px;color:${r.decision.color};letter-spacing:0.12em;margin-bottom:4px;">${esc(r.ticker)} · ${r.decision.label}</div>
+        <div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${esc(r.name)} · ${esc(r.type)} · ${priceLine} · ${moveLine}</div>
+        <div style="font-size:11px;color:#7a7daa;margin-top:4px;line-height:1.6;">${esc(r.decision.copy)}</div>
+      </div>
+    </div>
+    <div class="research-score-grid">${scores}</div>
+    <div class="detail-grid">
+      <div class="detail-box"><div class="detail-label">COMPANY SUMMARY</div><div class="detail-text">${esc(r.summary)}</div></div>
+      <div class="detail-box"><div class="detail-label">BULL CASE</div><div class="detail-text">${esc(r.bull)}</div></div>
+      <div class="detail-box"><div class="detail-label">BEAR CASE</div><div class="detail-text">${esc(r.bear)}</div></div>
+      <div class="detail-box"><div class="detail-label">VALUATION</div><div class="detail-text">${esc(r.valuationText)}</div></div>
+      <div class="detail-box"><div class="detail-label">MACRO EXPOSURE</div><div class="detail-text">${esc(r.macroText)}</div></div>
+      <div class="detail-box"><div class="detail-label">THESIS RISKS</div><div class="detail-text">${esc(r.risks)}</div></div>
+      <div class="detail-box"><div class="detail-label">CAPITAL REDEPLOYMENT</div><div class="detail-text">If this is not the best home for the next dollar, compare it against ${esc(alt)} and cash. Future v2 will rank against your whole portfolio.</div></div>
+      <div class="detail-box"><div class="detail-label">FIT FOR YOU</div><div class="detail-text">Bias: accumulator, early-retirement minded, prefers great businesses during fear. This score rewards durable thesis plus improved entry, not short-term trading setups.</div></div>
+    </div>
+  </div>`;
+}
+async function runResearch(){
+  const input=document.getElementById('research-symbol');
+  const status=document.getElementById('research-status');
+  const symbol=input.value.trim().toUpperCase();
+  if(!symbol){status.textContent='Enter a ticker first.';return;}
+  input.value=symbol;
+  status.textContent='Analyzing...';
+  try{await loadScreener();}catch(e){}
+  window._currentResearch=buildResearch(symbol);
+  renderResearchCard(window._currentResearch);
+  status.textContent='Research ready. Save Snapshot stores this locally for later calibration.';
+}
+function saveCurrentResearch(){
+  const status=document.getElementById('research-status');
+  if(!window._currentResearch){status.textContent='Analyze a ticker first.';return;}
+  const rows=researchHistory().filter(r=>!(r.ticker===window._currentResearch.ticker&&r.createdAt===window._currentResearch.createdAt));
+  rows.unshift(window._currentResearch);
+  saveResearchHistory(rows);
+  status.textContent=`Saved ${window._currentResearch.ticker} research snapshot locally.`;
+}
+function renderResearchHistory(){
+  const el=document.getElementById('research-history');
+  if(!el)return;
+  const rows=researchHistory();
+  if(!rows.length){el.textContent='No saved research yet.';return;}
+  el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Date</th><th>Ticker</th><th>Decision</th><th>Score</th><th>Price</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${new Date(r.createdAt).toLocaleDateString()}</td><td><strong>${esc(r.ticker)}</strong></td><td>${esc(r.decision?.label||'—')}</td><td>${r.score}</td><td>${r.price?money(r.price):'—'}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function clearResearchHistory(){if(confirm('Clear saved research snapshots from this browser?'))saveResearchHistory([]);}
+
+const ACCOUNT_BUCKETS=['Taxable','Retirement','Crypto'];
+const CASH_SYMBOLS=new Set(['CORE','SPAXX','FCASH','FDRXX','FZFXX','SPRXX','FTEXX','FNSXX','QIMHQ','CASH','USD']);
+const BOND_SYMBOLS=new Set(['BND','AGG','TLT','IEF','SHY','SGOV','BIL','TFLO','MUB','LQD','HYG']);
+function cleanSymbol(symbol){return String(symbol||'').trim().toUpperCase().replace(/\*+/g,'');}
+function isCashLike(symbol,description=''){
+  const s=cleanSymbol(symbol), d=String(description||'').toLowerCase();
+  return CASH_SYMBOLS.has(s)||d.includes('money market')||d.includes('core position')||d.includes('cash held')||d.includes('fidelity government money market');
+}
+function assetClass(symbol){
+  const s=cleanSymbol(symbol);
+  if(isCashLike(s))return 'Cash';
+  if(['BTC','ETH','SOL','ADA','AVAX','LINK','MATIC','DOT','COIN:BTC','COIN:ETH'].includes(s))return 'Crypto';
+  if(BOND_SYMBOLS.has(s))return 'Bond / Cash-like';
+  if(['SPY','VOO','VTI','QQQ','SCHD','IWM','DIA'].includes(s))return 'ETF / Fund';
+  return 'Stock';
+}
+function normalizeAccount(account,symbol){
+  const a=String(account||'').trim().toLowerCase();
+  if(a.includes('retire')||a.includes('ira')||a.includes('401')||a.includes('roth'))return 'Retirement';
+  if(a.includes('crypto')||assetClass(symbol)==='Crypto')return 'Crypto';
+  return 'Taxable';
+}
+function portfolio(){try{return JSON.parse(localStorage.getItem('portfolioHoldings')||'[]').map(r=>({...r,account:normalizeAccount(r.account,r.symbol)}));}catch(e){return [];}}
+function savePortfolio(rows){localStorage.setItem('portfolioHoldings',JSON.stringify(rows.map(r=>({...r,account:normalizeAccount(r.account,r.symbol)}))));renderPortfolio();}
 function addHolding(){
-  const sym=document.getElementById('h-symbol').value.trim().toUpperCase();
+  const sym=cleanSymbol(document.getElementById('h-symbol').value);
   const qty=parseFloat(document.getElementById('h-qty').value);
   const cost=parseFloat(document.getElementById('h-cost').value);
   const price=parseFloat(document.getElementById('h-price').value);
+  const account=normalizeAccount(document.getElementById('h-account').value,sym);
   if(!sym||isNaN(qty)||isNaN(price)){document.getElementById('portfolio-strategy').textContent='Enter at least symbol, quantity, and current price.';return;}
-  const rows=portfolio().filter(r=>r.symbol!==sym);
-  rows.push({symbol:sym,qty,cost:isNaN(cost)?0:cost,price});
+  const rows=portfolio().filter(r=>!(r.symbol===sym&&normalizeAccount(r.account,r.symbol)===account));
+  rows.push({symbol:sym,description:'Manual entry',qty,cost:isNaN(cost)?0:cost,price,account,isCash:isCashLike(sym)});
   savePortfolio(rows);
   ['h-symbol','h-qty','h-cost','h-price'].forEach(id=>document.getElementById(id).value='');
 }
 function clearPortfolio(){if(confirm('Clear all locally stored portfolio holdings?'))savePortfolio([]);}
+function holdingValue(r){return Number(r.qty||0)*Number(r.price||0);}
+function holdingBasis(r){return Number(r.qty||0)*Number(r.cost||0);}
+function aggregateHoldings(rows){
+  const map=new Map();
+  rows.forEach(r=>{
+    const symbol=cleanSymbol(r.symbol);
+    if(!symbol)return;
+    const value=holdingValue(r), basis=holdingBasis(r), qty=Number(r.qty||0);
+    const cur=map.get(symbol)||{symbol,description:r.description||'',qty:0,value:0,basis:0,accounts:new Set(),assetClass:assetClass(symbol),price:Number(r.price||0),isCash:isCashLike(symbol,r.description)};
+    cur.qty+=qty;cur.value+=value;cur.basis+=basis;if(value>0&&cur.qty)cur.price=value/cur.qty;cur.accounts.add(normalizeAccount(r.account,symbol));
+    if(!cur.description&&r.description)cur.description=r.description;
+    map.set(symbol,cur);
+  });
+  return [...map.values()].map(r=>({...r,accounts:[...r.accounts].join(', '),avgCost:r.qty&&r.basis?r.basis/r.qty:0}));
+}
+function renderHoldingRows(rows,total){
+  return rows.map(r=>{
+    const value=holdingValue(r), basis=holdingBasis(r), gl=value-basis, alloc=total?value/total*100:0;
+    return `<tr><td><strong>${esc(r.symbol)}</strong></td><td>${esc(normalizeAccount(r.account,r.symbol))}</td><td>${esc(assetClass(r.symbol))}</td><td>${Number(r.qty).toLocaleString()}</td><td>${r.cost?money(r.cost):'—'}</td><td>${money(r.price)}</td><td>${money(value)}</td><td>${alloc.toFixed(1)}%</td><td style="color:${gl>=0?'#1D9E75':'#E24B4A'};">${r.cost?money(gl):'—'}</td></tr>`;
+  }).join('');
+}
+function renderAggregateRows(rows,total){
+  return rows.map(r=>{
+    const gl=r.value-r.basis, alloc=total?r.value/total*100:0;
+    return `<tr><td><strong>${esc(r.symbol)}</strong></td><td>${esc(r.accounts)}</td><td>${esc(r.assetClass)}</td><td>${Number(r.qty).toLocaleString()}</td><td>${r.avgCost?money(r.avgCost):'—'}</td><td>${money(r.price)}</td><td>${money(r.value)}</td><td>${alloc.toFixed(1)}%</td><td style="color:${gl>=0?'#1D9E75':'#E24B4A'};">${r.basis?money(gl):'—'}</td></tr>`;
+  }).join('');
+}
 function renderPortfolio(){
   const rows=portfolio();
+  const analysis=document.getElementById('portfolio-analysis');
+  if(analysis)analysis.innerHTML=rows.length?'Click Analyze Master Portfolio after loading holdings.':'Add holdings or import a CSV first.';
   const total=rows.reduce((a,r)=>a+(Number(r.qty||0)*Number(r.price||0)),0);
-  document.getElementById('portfolio-summary').innerHTML=rows.length?`<div class="grid-2"><div class="detail-box"><div class="detail-label">TOTAL CURRENT VALUE</div><div class="detail-text" style="font-size:18px;color:#c8caee;">${money(total)}</div></div><div class="detail-box"><div class="detail-label">HOLDINGS</div><div class="detail-text" style="font-size:18px;color:#c8caee;">${rows.length}</div></div></div>`:'<div class="explain-body">No holdings loaded yet.</div>';
-  document.getElementById('portfolio-table').innerHTML=rows.length?`<thead><tr><th>Symbol</th><th>Qty</th><th>Avg Cost</th><th>Price</th><th>Value</th><th>Allocation</th><th>Gain/Loss</th></tr></thead><tbody>${rows.map(r=>{
-    const value=r.qty*r.price, basis=r.qty*(r.cost||0), gl=value-basis, alloc=total?value/total*100:0;
-    return `<tr><td><strong>${r.symbol}</strong></td><td>${Number(r.qty).toLocaleString()}</td><td>${r.cost?money(r.cost):'—'}</td><td>${money(r.price)}</td><td>${money(value)}</td><td>${alloc.toFixed(1)}%</td><td style="color:${gl>=0?'#1D9E75':'#E24B4A'};">${r.cost?money(gl):'—'}</td></tr>`;
-  }).join('')}</tbody>`:'';
+  const aggregated=aggregateHoldings(rows).sort((a,b)=>b.value-a.value);
+  const byAccount=ACCOUNT_BUCKETS.map(account=>{
+    const acctRows=rows.filter(r=>normalizeAccount(r.account,r.symbol)===account);
+    const value=acctRows.reduce((a,r)=>a+holdingValue(r),0);
+    return {account,rows:acctRows,value,alloc:total?value/total*100:0};
+  });
+  const byAsset=['Stock','ETF / Fund','Bond / Cash-like','Crypto','Cash'].map(cls=>{
+    const value=rows.filter(r=>assetClass(r.symbol)===cls).reduce((a,r)=>a+holdingValue(r),0);
+    return {cls,value,alloc:total?value/total*100:0};
+  }).filter(x=>x.value>0);
+  document.getElementById('portfolio-summary').innerHTML=rows.length?`<div class="grid-2">
+    <div class="detail-box"><div class="detail-label">MASTER VALUE</div><div class="detail-text" style="font-size:18px;color:#c8caee;">${money(total)}</div></div>
+    <div class="detail-box"><div class="detail-label">UNIQUE TICKERS</div><div class="detail-text" style="font-size:18px;color:#c8caee;">${aggregated.length}</div></div>
+    ${byAccount.map(a=>`<div class="detail-box"><div class="detail-label">${a.account.toUpperCase()}</div><div class="detail-text">${money(a.value)} · ${a.alloc.toFixed(1)}%</div></div>`).join('')}
+    ${byAsset.map(a=>`<div class="detail-box"><div class="detail-label">${a.cls.toUpperCase()}</div><div class="detail-text">${money(a.value)} · ${a.alloc.toFixed(1)}%</div></div>`).join('')}
+  </div>`:'<div class="explain-body">No holdings loaded yet. Master allocation decisions will appear here once positions are added.</div>';
+  document.getElementById('portfolio-table').innerHTML=rows.length?`<thead><tr><th>Symbol</th><th>Accounts</th><th>Type</th><th>Total Qty</th><th>Avg Cost</th><th>Price</th><th>Total Value</th><th>Allocation</th><th>Unrealized G/L</th></tr></thead><tbody>${renderAggregateRows(aggregated,total)}</tbody>`:'';
+  const drill=document.getElementById('portfolio-drilldown');
+  if(drill)drill.innerHTML=rows.length?byAccount.map(a=>`<div class="explain-row">
+    <div class="explain-title">${a.account} <span class="explain-src-tag">· ${money(a.value)} · ${a.alloc.toFixed(1)}% of master</span></div>
+    ${a.rows.length?`<div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Account</th><th>Type</th><th>Qty</th><th>Avg Cost</th><th>Price</th><th>Value</th><th>Master Alloc</th><th>Gain/Loss</th></tr></thead><tbody>${renderHoldingRows(a.rows,total)}</tbody></table></div>`:'<div class="explain-body">No holdings in this bucket yet.</div>'}
+  </div>`).join(''):'<div class="explain-body">Add holdings to drill into Taxable, Retirement, and Crypto.</div>';
   const btc=rows.find(r=>r.symbol==='BTC'), eth=rows.find(r=>r.symbol==='ETH');
   const score=currentCycleScore();
   const d=deploymentForScore(score);
   let msg=[];
+  msg.push(`Master portfolio is the decision layer. Drill-down buckets are for taxes, account constraints, and position location.`);
   if(score===null)msg.push('Load the BTC Score tab to generate cycle-aware reserve deployment guidance.');
   else if(score>20)msg.push(`BTC Score ${score}: DCA only. Continue $${BASE_DCA.BTC} BTC / $${BASE_DCA.ETH} ETH.`);
   else msg.push(`BTC Score ${score}: ${d.zone}. If BTC is also 15–20% below recent high, suggested reserve deployment is ${money(d.amount)}.`);
@@ -994,6 +1297,147 @@ function renderPortfolio(){
   if(eth&&total){msg.push(`ETH allocation is ${((eth.qty*eth.price)/total*100).toFixed(1)}% of loaded portfolio.`);}else msg.push('ETH holding not loaded yet.');
   document.getElementById('portfolio-strategy').innerHTML=msg.map(m=>`<div class="metric-row"><span>${m}</span></div>`).join('');
 }
+function sectorFor(symbol){
+  const s=String(symbol||'').toUpperCase();
+  if(assetClass(s)==='Cash')return 'Cash Reserve';
+  if(assetClass(s)==='Bond / Cash-like')return 'Fixed Income';
+  const sectors={META:'Communication Services',GOOGL:'Communication Services',NFLX:'Communication Services',COST:'Consumer Defensive',AMZN:'Consumer Discretionary',TSLA:'Consumer Discretionary',RKLB:'Industrials / Space',PLTR:'Software / AI',SOFI:'Financials',CPRT:'Industrials',FIX:'Infrastructure',PWR:'Infrastructure',AXON:'Public Safety Software',TMDX:'Healthcare',KTOS:'Defense',MWA:'Water Infrastructure',NVDA:'Semiconductors',AVGO:'Semiconductors',MSFT:'Software / AI',AAPL:'Consumer Technology',BTC:'Crypto',ETH:'Crypto'}; 
+  if(assetClass(s)==='ETF / Fund')return 'Diversified Fund';
+  if(assetClass(s)==='Crypto')return 'Crypto';
+  return sectors[s]||'Unclassified';
+}
+function themeFor(symbol){
+  const s=String(symbol||'').toUpperCase();
+  if(assetClass(s)==='Cash')return 'Dry powder / liquidity';
+  if(assetClass(s)==='Bond / Cash-like')return 'Stability / income';
+  const themes={META:'AI ads / digital platforms',COST:'Defensive consumer compounder',RKLB:'Space infrastructure',PLTR:'AI software / data platforms',SOFI:'Fintech / consumer credit',BTC:'Digital scarcity / crypto reserve',ETH:'Smart contract rails',CPRT:'Under-the-radar compounder',FIX:'AI data center infrastructure',PWR:'Grid modernization',AXON:'Public safety software',TMDX:'Medical devices / logistics',KTOS:'Defense autonomy',MWA:'Water infrastructure',NVDA:'AI compute',AVGO:'AI networking / semis',MSFT:'AI software platform',AAPL:'Consumer ecosystem'};
+  if(assetClass(s)==='ETF / Fund')return 'Broad market exposure';
+  return themes[s]||'Unclassified';
+}
+function portfolioAction(score,alloc){
+  if(score>=82&&alloc<15)return 'Add';
+  if(score>=72)return 'Keep';
+  if(score>=58)return 'Hold';
+  if(score>=45)return 'Reduce';
+  return 'Exit Review';
+}
+function scoreHolding(row,total){
+  if(row.isCash||row.assetClass==='Cash')return {...row,score:null,alloc:total?row.value/total*100:0,sector:'Cash Reserve',theme:'Dry powder / liquidity',action:'Cash Reserve'};
+  const profile=researchProfile(row.symbol);
+  const defaults=RESEARCH_SCORE_DEFAULTS[row.symbol]||{};
+  const valuationScore=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:defaults.valuation??50));
+  const macroScore=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:defaults.macro??50));
+  const base=clamp(profile.fundamental*0.25+profile.thesis*0.25+valuationScore*0.18+macroScore*0.12+profile.opportunity*0.20);
+  const alloc=total?row.value/total*100:0;
+  const concentrationPenalty=alloc>25?10:alloc>15?5:0;
+  const score=Math.round(clamp(base-concentrationPenalty));
+  return {...row,score,alloc,sector:sectorFor(row.symbol),theme:themeFor(row.symbol),action:portfolioAction(score,alloc),fundamental:profile.fundamental,thesis:profile.thesis,valuationScore,macroScore,opportunity:profile.opportunity};
+}
+function exposureRows(scored,key,total){
+  const map=new Map();
+  scored.forEach(r=>map.set(r[key],(map.get(r[key])||0)+r.value));
+  return [...map.entries()].sort((a,b)=>b[1]-a[1]).map(([name,value])=>`<div class="metric-row"><span>${esc(name)}</span><strong>${money(value)} · ${total?(value/total*100).toFixed(1):'0.0'}%</strong></div>`).join('');
+}
+function analyzePortfolio(){
+  const rows=portfolio();
+  const box=document.getElementById('portfolio-analysis');
+  if(!rows.length){box.innerHTML='Add holdings or import a CSV first.';return;}
+  const total=rows.reduce((a,r)=>a+holdingValue(r),0);
+  const allScored=aggregateHoldings(rows).map(r=>scoreHolding(r,total));
+  const investments=allScored.filter(r=>r.score!==null).sort((a,b)=>b.score-a.score);
+  const cashRows=allScored.filter(r=>r.score===null);
+  const concentration=allScored.filter(r=>r.alloc>=10).sort((a,b)=>b.alloc-a.alloc);
+  const strongest=investments.slice(0,5);
+  const weakest=[...investments].sort((a,b)=>a.score-b.score).slice(0,5);
+  const cashValue=cashRows.reduce((a,r)=>a+r.value,0);
+  const actionRows=investments.map(r=>`<tr><td><strong>${esc(r.symbol)}</strong></td><td>${r.score}</td><td>${esc(r.action)}</td><td>${r.alloc.toFixed(1)}%</td><td>${esc(r.theme)}</td><td>${esc(r.sector)}</td></tr>`).join('');
+  box.innerHTML=`<div class="grid-2">
+    <div class="detail-box"><div class="detail-label">HIGHEST CONVICTION</div><div class="detail-text">${strongest.length?strongest.map(r=>`${esc(r.symbol)} ${r.score} (${esc(r.action)})`).join('<br>'):'No scored investments yet.'}</div></div>
+    <div class="detail-box"><div class="detail-label">WEAKEST HOLDINGS</div><div class="detail-text">${weakest.length?weakest.map(r=>`${esc(r.symbol)} ${r.score} (${esc(r.action)})`).join('<br>'):'No scored investments yet.'}</div></div>
+    <div class="detail-box"><div class="detail-label">CONCENTRATION RISK</div><div class="detail-text">${concentration.length?concentration.map(r=>`${esc(r.symbol)} ${r.alloc.toFixed(1)}%`).join('<br>'):'No single position above 10%.'}</div></div>
+    <div class="detail-box"><div class="detail-label">CASH / DRY POWDER</div><div class="detail-text">${money(cashValue)} · ${total?(cashValue/total*100).toFixed(1):'0.0'}% of master. Cash-like rows are excluded from Add/Reduce scoring.</div></div>
+    <div class="detail-box"><div class="detail-label">NEXT-DOLLAR RULE</div><div class="detail-text">Add to high-score, underweight holdings first. Reduce low-score or oversized positions when better-ranked opportunities exist.</div></div>
+  </div>
+  <div class="detail-grid">
+    <div class="detail-box"><div class="detail-label">THEME EXPOSURE</div><div class="detail-text">${exposureRows(allScored,'theme',total)}</div></div>
+    <div class="detail-box"><div class="detail-label">SECTOR EXPOSURE</div><div class="detail-text">${exposureRows(allScored,'sector',total)}</div></div>
+  </div>
+  <div class="table-wrap"><table><thead><tr><th>Ticker</th><th>Buy Today Score</th><th>Action</th><th>Alloc</th><th>Theme</th><th>Sector</th></tr></thead><tbody>${actionRows||'<tr><td colspan="6">No scored investments yet.</td></tr>'}</tbody></table></div>`;
+}
+function memorySnapshots(){try{return JSON.parse(localStorage.getItem(MEMORY_SNAPSHOTS_KEY)||'[]');}catch(e){return [];}}
+function saveMemorySnapshots(rows){localStorage.setItem(MEMORY_SNAPSHOTS_KEY,JSON.stringify(rows.slice(0,200)));renderMemorySnapshots();}
+function collectPortfolioSnapshot(){
+  const rows=portfolio();
+  const total=rows.reduce((a,r)=>a+holdingValue(r),0);
+  const aggregated=aggregateHoldings(rows).sort((a,b)=>b.value-a.value);
+  const cashValue=aggregated.filter(r=>r.isCash||r.assetClass==='Cash').reduce((a,r)=>a+r.value,0);
+  const concentration=aggregated.filter(r=>total&&r.value/total*100>=10).map(r=>({symbol:r.symbol,alloc:+(r.value/total*100).toFixed(1),value:r.value}));
+  const allocations=aggregated.map(r=>({symbol:r.symbol,value:r.value,alloc:total?+(r.value/total*100).toFixed(1):0,assetClass:r.assetClass,accounts:r.accounts}));
+  return {total,cashValue,cashPct:total?+(cashValue/total*100).toFixed(1):0,holdings:aggregated.length,allocations,concentration};
+}
+function collectSnapshot(){
+  const eventType=document.getElementById('memory-event-type')?.value||'Normal Market';
+  const notes=document.getElementById('memory-notes')?.value||'';
+  const cycle=window._cycleScore||null;
+  const btcInputs=cycle?.inputs||getCycleCache()?.vals||{};
+  const opportunities=rankedOpportunities().slice(0,5).map(o=>({ticker:o.ticker,score:o.score,drop:o.drop,reason:o.reason,action:actionFor(o.score,o.thesis,o.confidence).label}));
+  const research=window._currentResearch?{ticker:window._currentResearch.ticker,score:window._currentResearch.score,decision:window._currentResearch.decision?.label,price:window._currentResearch.price||null}:null;
+  const headlines=[...document.querySelectorAll('#live-news-list .news-title')].slice(0,6).map(el=>el.textContent.trim()).filter(Boolean);
+  return {
+    id:'snap_'+Date.now(),
+    createdAt:new Date().toISOString(),
+    eventType,
+    notes,
+    btc:{score:cycle?.score??null,label:cycle?.label||null,price:window._btcPrice||getCycleCache()?.btcPrice||null,inputs:btcInputs},
+    opportunities,
+    research,
+    portfolio:collectPortfolioSnapshot(),
+    headlines
+  };
+}
+function saveDailySnapshot(){
+  const snap=collectSnapshot();
+  const rows=memorySnapshots();
+  rows.unshift(snap);
+  saveMemorySnapshots(rows);
+  const status=document.getElementById('memory-status');
+  if(status)status.textContent=`Saved snapshot for ${new Date(snap.createdAt).toLocaleString()} · ${snap.eventType}.`;
+}
+function renderMemorySnapshots(){
+  const el=document.getElementById('memory-list');
+  if(!el)return;
+  const filter=document.getElementById('memory-filter')?.value||'all';
+  const rows=memorySnapshots().filter(s=>filter==='all'||s.eventType===filter);
+  if(!rows.length){el.textContent='No snapshots saved yet.';return;}
+  el.innerHTML=rows.map(s=>{
+    const top=s.opportunities?.[0];
+    const p=s.portfolio||{};
+    const btcScore=s.btc?.score??'—';
+    const topOpp=top?`${top.ticker} ${top.score} (${top.action})`:'—';
+    const research=s.research?`${s.research.ticker} ${s.research.score} (${s.research.decision})`:'—';
+    const conc=(p.concentration||[]).length?(p.concentration||[]).map(c=>`${c.symbol} ${c.alloc}%`).join(', '):'none above 10%';
+    return `<div class="op-card">
+      <div class="op-head" onclick="toggleCard(this)">
+        <div>
+          <div class="op-ticker">${esc(s.eventType)} <span style="font-size:10px;color:#3a3d6a;">${new Date(s.createdAt).toLocaleString()}</span></div>
+          <div class="op-sub">BTC ${btcScore} · Top opportunity ${esc(topOpp)} · Portfolio ${money(p.total||0)}</div>
+        </div>
+        <div><div class="op-label" style="color:#7a7daa;">SNAPSHOT</div></div>
+      </div>
+      <div class="op-details">
+        <div class="detail-grid">
+          <div class="detail-box"><div class="detail-label">BTC MEMORY</div><div class="detail-text">Score ${btcScore} · Fear & Greed ${s.btc?.inputs?.fg??'—'} · MVRV ${s.btc?.inputs?.mvrvZ??'—'} · NUPL ${s.btc?.inputs?.nupl??'—'} · Puell ${s.btc?.inputs?.puell??'—'}</div></div>
+          <div class="detail-box"><div class="detail-label">OPPORTUNITY MEMORY</div><div class="detail-text">${(s.opportunities||[]).map(o=>`${esc(o.ticker)} ${o.score} · ${esc(o.action)}`).join('<br>')||'—'}</div></div>
+          <div class="detail-box"><div class="detail-label">PORTFOLIO MEMORY</div><div class="detail-text">Master ${money(p.total||0)} · Cash ${money(p.cashValue||0)} (${p.cashPct||0}%) · Concentration: ${esc(conc)}</div></div>
+          <div class="detail-box"><div class="detail-label">RESEARCH MEMORY</div><div class="detail-text">${esc(research)}</div></div>
+          <div class="detail-box"><div class="detail-label">HEADLINES</div><div class="detail-text">${(s.headlines||[]).map(esc).join('<br>')||'—'}</div></div>
+          <div class="detail-box"><div class="detail-label">NOTES</div><div class="detail-text">${esc(s.notes||'No notes.')}</div></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function clearMemorySnapshots(){if(confirm('Clear all locally saved memory snapshots?'))saveMemorySnapshots([]);}
 function parseCSV(text){
   const rows=[];let cur='',row=[],q=false;
   for(let i=0;i<text.length;i++){
@@ -1010,28 +1454,69 @@ function parseCSV(text){
   return rows;
 }
 function norm(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
+function parseMoney(v){
+  const raw=String(v??'').replace(/[$,%"]/g,'').replace(/,/g,'').trim();
+  if(!raw||raw==='--'||raw==='—')return NaN;
+  const neg=/^\(.*\)$/.test(raw);
+  const n=parseFloat(raw.replace(/[()]/g,''));
+  return Number.isFinite(n)?(neg?-n:n):NaN;
+}
+function isFidelityNoiseRow(row){
+  const joined=row.map(c=>String(c||'').trim()).filter(Boolean).join(' ').toLowerCase();
+  if(!joined)return true;
+  return joined.includes('fidelity brokerage services')||joined.includes('not fdic insured')||joined.includes('may lose value')||joined.includes('before investing')||joined.includes('all information')||joined.includes('provided for informational')||joined.includes('downloaded from fidelity')||joined.includes('accounts carried');
+}
+function findFidelityHeader(rows){
+  return rows.findIndex(r=>{
+    const h=r.map(norm);
+    return h.includes('symbol')&&h.includes('description')&&h.includes('quantity')&&h.some(x=>x==='lastprice')&&h.some(x=>x==='currentvalue')&&h.some(x=>x==='accountname');
+  });
+}
 function importPortfolioCSV(e){
   const file=e.target.files[0]; if(!file)return;
   const reader=new FileReader();
   reader.onload=ev=>{
-    const rows=parseCSV(ev.target.result).filter(r=>r.some(c=>String(c).trim()));
-    if(rows.length<2){document.getElementById('csv-status').textContent='Could not read CSV rows.';return;}
-    const header=rows[0].map(norm);
+    const rawRows=parseCSV(ev.target.result);
+    const headerIdx=findFidelityHeader(rawRows);
+    const dataRows=(headerIdx>=0?rawRows.slice(headerIdx):rawRows).filter(r=>!isFidelityNoiseRow(r));
+    if(dataRows.length<2){document.getElementById('csv-status').textContent='Could not read Fidelity CSV rows.';return;}
+    const header=dataRows[0].map(norm);
+    const col=(name)=>header.indexOf(norm(name));
     const find=(names)=>header.findIndex(h=>names.some(n=>h.includes(n)));
-    const iSym=find(['symbol','ticker']), iQty=find(['quantity','qty','shares']), iCost=find(['costbasis','averagecost','avgcost']), iVal=find(['currentvalue','marketvalue','value']), iPrice=find(['lastprice','price']);
-    if(iSym<0||iQty<0){document.getElementById('csv-status').textContent='Could not find Symbol and Quantity columns. Try a positions CSV export.';return;}
-    const imported=[];
-    rows.slice(1).forEach(r=>{
-      const symbol=String(r[iSym]||'').trim().toUpperCase();
-      const qty=parseFloat(String(r[iQty]||'').replace(/[$,%]/g,''));
-      const cost=iCost>=0?parseFloat(String(r[iCost]||'').replace(/[$,%]/g,'')):0;
-      let price=iPrice>=0?parseFloat(String(r[iPrice]||'').replace(/[$,%]/g,'')):NaN;
-      if(isNaN(price)&&iVal>=0&&!isNaN(qty)&&qty!==0){price=parseFloat(String(r[iVal]||'').replace(/[$,%]/g,''))/qty;}
-      if(symbol&&!isNaN(qty)&&!isNaN(price))imported.push({symbol,qty,cost:isNaN(cost)?0:cost,price});
+    const iSym=col('Symbol')>=0?col('Symbol'):find(['symbol','ticker']);
+    const iDesc=col('Description');
+    const iQty=col('Quantity')>=0?col('Quantity'):find(['quantity','qty','shares']);
+    const iPrice=col('Last Price')>=0?col('Last Price'):find(['lastprice','price']);
+    const iVal=col('Current Value')>=0?col('Current Value'):find(['currentvalue','marketvalue','value']);
+    const iCostTotal=col('Cost Basis Total')>=0?col('Cost Basis Total'):find(['costbasistotal','totalcostbasis']);
+    const iAvgCost=col('Average Cost Basis')>=0?col('Average Cost Basis'):find(['averagecostbasis','averagecost','avgcost']);
+    const iAcct=col('Account Name')>=0?col('Account Name'):find(['account','accountname','accounttype','registration']);
+    if(iSym<0||iQty<0||iPrice<0||iVal<0){document.getElementById('csv-status').textContent='Could not find Fidelity columns: Symbol, Quantity, Last Price, and Current Value.';return;}
+    const imported=[];let skipped=0,cashCount=0;
+    dataRows.slice(1).forEach(r=>{
+      if(isFidelityNoiseRow(r)){skipped++;return;}
+      const symbol=cleanSymbol(r[iSym]);
+      const description=iDesc>=0?String(r[iDesc]||'').trim():'';
+      if(!symbol){skipped++;return;}
+      const qty=parseMoney(r[iQty]);
+      const value=parseMoney(r[iVal]);
+      let price=parseMoney(r[iPrice]);
+      let cost=iAvgCost>=0?parseMoney(r[iAvgCost]):NaN;
+      const totalCost=iCostTotal>=0?parseMoney(r[iCostTotal]):NaN;
+      if(!Number.isFinite(cost)&&Number.isFinite(totalCost)&&Number.isFinite(qty)&&qty!==0)cost=totalCost/qty;
+      if(!Number.isFinite(price)&&Number.isFinite(value)&&Number.isFinite(qty)&&qty!==0)price=value/qty;
+      if(isCashLike(symbol,description)&&!Number.isFinite(price))price=1;
+      if(isCashLike(symbol,description)&&!Number.isFinite(qty)&&Number.isFinite(value)){price=1;}
+      const finalQty=Number.isFinite(qty)?qty:(Number.isFinite(value)&&price?value/price:NaN);
+      const account=normalizeAccount(iAcct>=0?r[iAcct]:'',symbol);
+      const cash=isCashLike(symbol,description);
+      if(cash)cashCount++;
+      if(symbol&&Number.isFinite(finalQty)&&Number.isFinite(price))imported.push({symbol,description,qty:finalQty,cost:Number.isFinite(cost)?cost:0,price,account,isCash:cash});
+      else skipped++;
     });
     if(!imported.length){document.getElementById('csv-status').textContent='CSV loaded, but no usable holdings were found.';return;}
     savePortfolio(imported);
-    document.getElementById('csv-status').textContent=`Imported ${imported.length} holdings from ${file.name}. Stored locally in this browser.`;
+    document.getElementById('csv-status').textContent=`Imported ${imported.length} Fidelity rows from ${file.name}. Cash-like rows: ${cashCount}. Ignored rows: ${skipped}. Stored locally in this browser.`;
   };
   reader.readAsText(file);
 }
@@ -1121,8 +1606,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   try{updateQuotaDisplay('smart cache active: 8 AM / 8 PM PT');}catch(e){}
   try{applyCycleCache();}catch(e){}
   try{renderOpportunities();}catch(e){}
+  try{renderResearchHistory();}catch(e){}
   try{renderEmergingLeaders();}catch(e){}
   try{renderPortfolio();}catch(e){}
+  try{renderMemorySnapshots();}catch(e){}
   try{loadBrief();}catch(e){
     const loading=document.getElementById('brief-loading');
     const content=document.getElementById('brief-content');
