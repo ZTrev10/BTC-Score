@@ -232,7 +232,10 @@ td strong{color:#c8caee;font-weight:500;}
       <p class="section-label">OPPORTUNITY RANKING</p>
       <p style="font-size:11px;color:#3a3d6a;">Primary: Opportunity Score · Secondary: Buy / Watch / Avoid / Too Risky</p>
     </div>
-    <button class="btn" onclick="renderOpportunities()">↻ Refresh Ranking</button>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:10px;color:#3a3d6a;" id="screener-status">Prices load on tab open</span>
+      <button class="btn" onclick="loadScreener()">↻ Refresh Prices</button>
+    </div>
   </div>
 
   
@@ -476,6 +479,8 @@ function switchTab(t){
   if(content)content.classList.add('active');
   if(t==='brief'&&document.getElementById('brief-content').style.display==='none')loadBrief();
   if(t==='cycle')smartRefreshCycle(false);
+  if(t==='opportunities')loadScreener();
+  if(t==='emerging')loadScreener();
 }
 
 async function bgCall(ep){
@@ -758,14 +763,23 @@ function renderReserveLadder(){
 function toggleCard(el){el.closest('.op-card').classList.toggle('open');}
 function renderOpportunities(){
   renderReserveLadder();
-  const sorted=[...WATCHLIST].map(i=>({...i,score:opportunityScore(i)})).sort((a,b)=>b.score-a.score);
+  const sorted=[...WATCHLIST].map(i=>{
+    const liveDrop=liveChangeFor(i.ticker);
+    const livePrice=livePriceFor(i.ticker);
+    const drop=liveDrop!==null?liveDrop:i.drop;
+    const enriched={...i,drop,livePrice,isLive:liveDrop!==null};
+    return {...enriched,score:opportunityScore(enriched)};
+  }).sort((a,b)=>b.score-a.score);
   document.getElementById('opportunity-list').innerHTML=sorted.map(item=>{
     const a=actionFor(item.score,item.thesis,item.confidence);
+    const priceTag=item.livePrice?` · $${Number(item.livePrice).toLocaleString(undefined,{maximumFractionDigits:2})}`:'';
+    const liveTag=item.isLive?'<span style="color:#1D9E75;font-size:9px;margin-left:6px;">● LIVE</span>':'<span style="color:#3a3d6a;font-size:9px;margin-left:6px;">est.</span>';
+    const isDown=item.drop<-4.5;
     return `<div class="op-card">
       <div class="op-head" onclick="toggleCard(this)">
         <div>
-          <div class="op-ticker">${item.ticker} <span style="font-size:10px;color:#3a3d6a;">${item.name}</span></div>
-          <div class="op-sub">Down ${pct(item.drop)} · ${item.reason}</div>
+          <div class="op-ticker">${item.ticker}${liveTag} <span style="font-size:10px;color:#3a3d6a;">${item.name}</span></div>
+          <div class="op-sub">${isDown?'Down':'Change'} ${pct(item.drop)}${priceTag} · ${item.category}</div>
         </div>
         <div>
           <div class="op-score" style="color:${a.color};">${item.score}</div>
@@ -774,7 +788,7 @@ function renderOpportunities(){
       </div>
       <div class="op-details">
         <div class="detail-grid">
-          <div class="detail-box"><div class="detail-label">WHY IS IT DOWN?</div><div class="detail-text">${item.reason}. Confirm live news before acting; this V2 prototype uses placeholder news logic until a live news API is added.</div></div>
+          <div class="detail-box"><div class="detail-label">WHY IS IT DOWN?</div><div class="detail-text">${item.reason}${item.isLive?'':' (Placeholder context — live news API not yet connected.)'}</div></div>
           <div class="detail-box"><div class="detail-label">THESIS INTEGRITY</div><div class="detail-text">${item.thesis}/100 · ${item.thesis>=80?'Thesis appears intact.':item.thesis>=60?'Some risk; monitor before sizing up.':'Potential impairment; avoid or keep small.'}</div></div>
           <div class="detail-box"><div class="detail-label">CONFIDENCE</div><div class="detail-text">${item.confidence}/100 · Based on signal strength, price move, and news severity assumptions.</div></div>
           <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text">Primary ranking is Opportunity Score. Secondary action is ${a.label}. For BTC/ETH, reserve capital requires BTC Score below 20 plus a 15–20% drawdown from recent high.</div></div>
@@ -849,7 +863,7 @@ function renderPortfolio(){
     const value=r.qty*r.price, basis=r.qty*(r.cost||0), gl=value-basis, alloc=total?value/total*100:0;
     return `<tr><td><strong>${r.symbol}</strong></td><td>${Number(r.qty).toLocaleString()}</td><td>${r.cost?money(r.cost):'—'}</td><td>${money(r.price)}</td><td>${money(value)}</td><td>${alloc.toFixed(1)}%</td><td style="color:${gl>=0?'#1D9E75':'#E24B4A'};">${r.cost?money(gl):'—'}</td></tr>`;
   }).join('')}</tbody>`:'';
-  const btc=rows.find(r=>r.symbol==='BTC'), etc=rows.find(r=>r.symbol==='ETH');
+  const btc=rows.find(r=>r.symbol==='BTC'), eth=rows.find(r=>r.symbol==='ETH');
   const score=currentCycleScore();
   const d=deploymentForScore(score);
   let msg=[];
@@ -857,7 +871,7 @@ function renderPortfolio(){
   else if(score>20)msg.push(`BTC Score ${score}: DCA only. Continue $${BASE_DCA.BTC} BTC / $${BASE_DCA.ETH} ETH.`);
   else msg.push(`BTC Score ${score}: ${d.zone}. If BTC is also 15–20% below recent high, suggested reserve deployment is ${money(d.amount)}.`);
   if(btc&&total){msg.push(`BTC allocation is ${((btc.qty*btc.price)/total*100).toFixed(1)}% of loaded portfolio.`);}else msg.push('BTC holding not loaded yet.');
-  if(etc&&total){msg.push(`ETH allocation is ${((etc.qty*etc.price)/total*100).toFixed(1)}% of loaded portfolio.`);}else msg.push('ETH holding not loaded yet.');
+  if(eth&&total){msg.push(`ETH allocation is ${((eth.qty*eth.price)/total*100).toFixed(1)}% of loaded portfolio.`);}else msg.push('ETH holding not loaded yet.');
   document.getElementById('portfolio-strategy').innerHTML=msg.map(m=>`<div class="metric-row"><span>${m}</span></div>`).join('');
 }
 function parseCSV(text){
@@ -901,6 +915,41 @@ function importPortfolioCSV(e){
   };
   reader.readAsText(file);
 }
+
+// ── Live Screener ─────────────────────────────────────────────────────────────
+window._screenerData = {}; // symbol → {price, changePercent, name, ...}
+let _screenerLoading = false;
+
+async function loadScreener(){
+  if(_screenerLoading)return;
+  _screenerLoading=true;
+  const statusEl=document.getElementById('screener-status');
+  if(statusEl)statusEl.textContent='Loading live prices…';
+  try{
+    const r=await fetch('/api/screener?ts='+Date.now());
+    if(!r.ok)throw new Error('screener '+r.status);
+    const d=await r.json();
+    (d.quotes||[]).forEach(q=>{ window._screenerData[q.symbol]=q; });
+    if(statusEl)statusEl.textContent='Prices updated '+new Date(d.updatedAt).toLocaleTimeString();
+    renderOpportunities();
+    renderEmergingLeaders();
+  }catch(e){
+    if(statusEl)statusEl.textContent='Live prices unavailable — using manual estimates';
+  }finally{
+    _screenerLoading=false;
+  }
+}
+
+function liveChangeFor(ticker){
+  const q=window._screenerData[ticker];
+  if(!q||q.changePercent==null)return null;
+  return q.changePercent; // already as percent, e.g. -6.3
+}
+function livePriceFor(ticker){
+  const q=window._screenerData[ticker];
+  return q?.price ?? null;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 window.addEventListener('DOMContentLoaded',()=>{
   try{document.getElementById('brief-date').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});}catch(e){}
