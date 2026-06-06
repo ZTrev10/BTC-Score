@@ -62,6 +62,37 @@ body{background:#07080f;color:#e0e0f0;font-family:'DM Mono','Courier New',monosp
 .score-mini{background:#07080f;border-radius:8px;padding:12px;border:1px solid #1a1c30;display:flex;gap:12px;align-items:center;margin-bottom:10px;}
 .score-mini-num{font-family:'Bebas Neue',sans-serif;font-size:48px;line-height:1;}
 .footer-note{font-size:10px;color:#2a2d50;line-height:1.8;text-align:center;margin-top:16px;}
+
+.tab-bar{overflow-x:auto;white-space:nowrap;}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;}
+.metric-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #1a1c30;font-size:11px;color:#5a5d8a;}
+.metric-row:last-child{border-bottom:none;}
+.metric-row strong{color:#c8caee;font-weight:500;}
+.op-card{background:#0d0e1a;border:1px solid #1e2040;border-radius:12px;padding:16px;margin-bottom:12px;}
+.op-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;cursor:pointer;}
+.op-ticker{font-size:16px;color:#c8caee;font-weight:500;letter-spacing:0.08em;}
+.op-sub{font-size:10px;color:#4a4d7a;margin-top:4px;line-height:1.5;}
+.op-score{font-family:'Bebas Neue',sans-serif;font-size:52px;line-height:0.9;text-align:right;}
+.op-label{font-size:10px;letter-spacing:0.12em;text-align:right;margin-top:4px;}
+.op-details{display:none;margin-top:14px;padding-top:14px;border-top:1px solid #1a1c30;}
+.op-card.open .op-details{display:block;}
+.detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:10px;}
+.detail-box{background:#07080f;border:1px solid #1a1c30;border-radius:8px;padding:10px;}
+.detail-label{font-size:9px;color:#3a3d6a;letter-spacing:0.12em;margin-bottom:4px;}
+.detail-text{font-size:11px;color:#7a7daa;line-height:1.55;}
+.small-input{width:100%;padding:9px 10px;background:#07080f;border:1px solid #2a2d50;border-radius:8px;color:#c8caee;font-family:'DM Mono',monospace;font-size:12px;outline:none;}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px;margin:12px 0;}
+.table-wrap{overflow-x:auto;margin-top:10px;}
+table{width:100%;border-collapse:collapse;font-size:11px;color:#5a5d8a;}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid #1a1c30;white-space:nowrap;}
+th{font-size:9px;letter-spacing:0.14em;color:#3a3d6a;font-weight:400;}
+td strong{color:#c8caee;font-weight:500;}
+.file-input{width:100%;padding:11px;background:#07080f;border:1px dashed #2a2d50;border-radius:8px;color:#6a6d9a;font-family:'DM Mono',monospace;font-size:11px;margin:10px 0;}
+.ladder-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid #1a1c30;font-size:11px;color:#5a5d8a;}
+.ladder-row:last-child{border-bottom:none;}
+.ladder-row.active{color:#c8caee;}
+.ladder-row.active strong{color:#1D9E75;}
+
 </style>
 </head>
 <body>
@@ -69,6 +100,8 @@ body{background:#07080f;color:#e0e0f0;font-family:'DM Mono','Courier New',monosp
 <div class="tab-bar">
   <div class="tab active" onclick="switchTab('brief')">📰 DAILY BRIEF</div>
   <div class="tab" onclick="switchTab('cycle')">₿ BTC SCORE</div>
+  <div class="tab" onclick="switchTab('opportunities')">🎯 OPPORTUNITIES</div>
+  <div class="tab" onclick="switchTab('portfolio')">📊 PORTFOLIO</div>
 </div>
 
 <!-- ═══════════════ DAILY BRIEF TAB ═══════════════ -->
@@ -89,15 +122,14 @@ body{background:#07080f;color:#e0e0f0;font-family:'DM Mono','Courier New',monosp
 <!-- ═══════════════ BTC SCORE TAB ═══════════════ -->
 <div class="tab-content" id="tab-cycle">
 
-  <div id="setup-panel" style="max-width:500px;margin:40px auto;">
-    <p class="section-label" style="margin-bottom:10px;">BGEOMETRICS API KEY</p>
-    <p style="font-size:12px;color:#5a5d8a;margin-bottom:14px;line-height:1.6;">Enter your key to load real on-chain data. Stays local — never stored anywhere. Free tier = 15 calls/day (~5 refreshes).</p>
-    <input class="key-input" id="api-input" type="password" placeholder="Paste your BGeometrics API key..." />
-    <button class="btn" onclick="startFetch()" style="width:100%;padding:11px;">Load live data →</button>
+  <div id="setup-panel" style="display:none;max-width:500px;margin:40px auto;">
+    <p class="section-label" style="margin-bottom:10px;">BGEOMETRICS CONNECTION</p>
+    <p style="font-size:12px;color:#5a5d8a;margin-bottom:14px;line-height:1.6;">BGeometrics is accessed through the Vercel API proxy. Add BGEOMETRICS_API_KEY in Vercel environment variables. Your key should never be pasted into the browser.</p>
+    <button class="btn" onclick="startFetch()" style="width:100%;padding:11px;">Load BTC score →</button>
     <div class="status" id="status-msg"></div>
   </div>
 
-  <div id="dashboard" style="display:none;">
+  <div id="dashboard" style="display:block;">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:18px;">
       <div>
         <span style="font-size:14px;color:#9a9dcc;" id="price-display">BTC —</span>
@@ -106,8 +138,8 @@ body{background:#07080f;color:#e0e0f0;font-family:'DM Mono','Courier New',monosp
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <span style="font-size:11px;color:#2a2d50;" id="calls-display"></span>
         <span style="font-size:11px;color:#2a2d50;" id="updated-display"></span>
-        <button class="btn" onclick="refreshAll()">↻ Refresh</button>
-        <button class="btn" onclick="resetKey()">Change key</button>
+        <button class="btn" onclick="forceRefreshAll()">↻ Force Refresh</button>
+        <button class="btn" onclick="startFetch()">Use proxy</button>
       </div>
     </div>
 
@@ -129,7 +161,7 @@ body{background:#07080f;color:#e0e0f0;font-family:'DM Mono','Courier New',monosp
             <span class="pill" style="color:#A32D2D;border-color:#A32D2D;">76–100 Avoid</span>
           </div>
           <div class="src-legend">
-            <span style="font-size:11px;color:#3a3d6a;"><span class="src-dot" style="background:#378ADD;"></span>BGeometrics (3 calls)</span>
+            <span style="font-size:11px;color:#3a3d6a;"><span class="src-dot" style="background:#378ADD;"></span>BGeometrics via Vercel proxy (3 calls)</span>
             <span style="font-size:11px;color:#3a3d6a;"><span class="src-dot" style="background:#1D9E75;"></span>Free / unlimited</span>
           </div>
           <p style="font-size:10px;color:#2a2d50;margin-top:8px;line-height:1.6;">Lower = historically better buy zone. On-chain data updates daily — 1–2 refreshes/day is sufficient.</p>
@@ -166,12 +198,143 @@ body{background:#07080f;color:#e0e0f0;font-family:'DM Mono','Courier New',monosp
         <div class="explain-body">Bitcoin's long-term floor. Every prior cycle saw the deepest bear market low touch or dip below this level. Currently rising ~$500/week. Within 20% = historically deep value. 3–5x above = historically near peaks.</div>
       </div>
     </div>
-    <p class="footer-note">Not financial advice · On-chain data via BGeometrics · Fear & Greed via Alternative.me · Price/MA via CoinGecko</p>
+    <p class="footer-note">Not financial advice · On-chain data via BGeometrics proxy · Fear & Greed via Alternative.me · Price/MA via CoinGecko</p>
+  </div>
+</div>
+
+
+
+<!-- ═══════════════ OPPORTUNITIES TAB ═══════════════ -->
+<div class="tab-content" id="tab-opportunities">
+  <div class="brief-header">
+    <div>
+      <p class="section-label">OPPORTUNITY RANKING</p>
+      <p style="font-size:11px;color:#3a3d6a;">Primary: Opportunity Score · Secondary: Buy / Watch / Avoid / Too Risky</p>
+    </div>
+    <button class="btn" onclick="renderOpportunities()">↻ Refresh Ranking</button>
+  </div>
+
+  <div class="card">
+    <p class="section-label">BTC RESERVE DEPLOYMENT ENGINE</p>
+    <div class="score-mini">
+      <div class="score-mini-num" id="opp-cycle-score" style="color:#3a3d6a;">—</div>
+      <div>
+        <div id="opp-cycle-zone" style="font-size:12px;color:#6a6d9a;letter-spacing:0.12em;margin-bottom:4px;">LOAD BTC SCORE FIRST</div>
+        <div id="opp-deploy-note" style="font-size:11px;color:#5a5d8a;line-height:1.6;">Base DCA remains $250 BTC / $50 ETC. Reserve capital only activates when BTC Score is below 20 and BTC is 15–20% below recent high.</div>
+      </div>
+    </div>
+    <div id="reserve-ladder"></div>
+  </div>
+
+  <div id="opportunity-list"></div>
+
+  <div class="card">
+    <p class="section-label">FEATURE DECISIONS</p>
+    <div id="feature-decisions"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ PORTFOLIO TAB ═══════════════ -->
+<div class="tab-content" id="tab-portfolio">
+  <div class="brief-header">
+    <div>
+      <p class="section-label">PORTFOLIO</p>
+      <p style="font-size:11px;color:#3a3d6a;">Manual entry for now · Fidelity CSV import scaffold included</p>
+    </div>
+    <button class="btn" onclick="clearPortfolio()">Clear Portfolio</button>
+  </div>
+
+  <div class="card">
+    <p class="section-label">IMPORT PORTFOLIO CSV</p>
+    <p style="font-size:11px;color:#5a5d8a;line-height:1.7;margin-bottom:8px;">Export positions from Fidelity as CSV, then upload here. The importer looks for common columns like Symbol, Quantity, Cost Basis, Current Value, Last Price, and Description.</p>
+    <input class="file-input" type="file" id="portfolio-csv" accept=".csv,text/csv" onchange="importPortfolioCSV(event)">
+    <div class="status" id="csv-status"></div>
+  </div>
+
+  <div class="card">
+    <p class="section-label">ADD / UPDATE HOLDING</p>
+    <div class="form-grid">
+      <input class="small-input" id="h-symbol" placeholder="Symbol e.g. BTC, ETC, NVDA">
+      <input class="small-input" id="h-qty" type="number" step="any" placeholder="Quantity">
+      <input class="small-input" id="h-cost" type="number" step="any" placeholder="Avg cost">
+      <input class="small-input" id="h-price" type="number" step="any" placeholder="Current price">
+    </div>
+    <button class="btn" onclick="addHolding()">Add / Update Holding</button>
+  </div>
+
+  <div class="card">
+    <p class="section-label">PORTFOLIO HEALTH</p>
+    <div id="portfolio-summary"></div>
+    <div class="table-wrap"><table id="portfolio-table"></table></div>
+  </div>
+
+  <div class="card">
+    <p class="section-label">PORTFOLIO-AWARE STRATEGY</p>
+    <div id="portfolio-strategy" class="explain-body">Add holdings or import a CSV to generate position-aware suggestions.</div>
   </div>
 </div>
 
 <script>
 const S={key:'',calls:0};
+const BG_DAILY_LIMIT=15;
+const BG_CALLS_PER_FULL_REFRESH=3;
+const BG_CACHE_KEY='trevor_btc_cycle_cache_v2';
+const BG_USAGE_KEY='trevor_bgeometrics_usage_v1';
+function ptParts(d=new Date()){
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).formatToParts(d).reduce((a,p)=>{a[p.type]=p.value;return a;},{});
+  return {y:+parts.year,m:+parts.month,d:+parts.day,h:+parts.hour,min:+parts.minute,sec:+parts.second,date:`${parts.year}-${parts.month}-${parts.day}`};
+}
+function ptDateKey(){return ptParts().date;}
+function bgUsage(){
+  try{const u=JSON.parse(localStorage.getItem(BG_USAGE_KEY)||'{}');return u.date===ptDateKey()?u:{date:ptDateKey(),calls:0};}
+  catch(e){return {date:ptDateKey(),calls:0};}
+}
+function setBgUsage(calls){localStorage.setItem(BG_USAGE_KEY,JSON.stringify({date:ptDateKey(),calls:Math.max(0,calls)}));updateQuotaDisplay();}
+function addBgUsage(n){const u=bgUsage();setBgUsage(u.calls+n);}
+function bgRemaining(){return Math.max(0,BG_DAILY_LIMIT-bgUsage().calls);}
+function updateQuotaDisplay(extra=''){
+  const el=document.getElementById('calls-display');
+  if(el)el.textContent=`${bgRemaining()} / ${BG_DAILY_LIMIT} BGeometrics calls left today${extra?` · ${extra}`:''}`;
+}
+function cacheCycle(vals,meta={}){
+  localStorage.setItem(BG_CACHE_KEY,JSON.stringify({vals,btcPrice:window._btcPrice||null,realizedProxy:window._realizedProxy||null,updatedAt:Date.now(),...meta}));
+}
+function getCycleCache(){try{return JSON.parse(localStorage.getItem(BG_CACHE_KEY)||'null');}catch(e){return null;}}
+function applyCycleCache(cache=getCycleCache()){
+  if(!cache||!cache.vals)return false;
+  if(cache.btcPrice)window._btcPrice=cache.btcPrice;
+  if(cache.realizedProxy)window._realizedProxy=cache.realizedProxy;
+  renderCards(cache.vals);updateGauge(cache.vals);
+  const upd=document.getElementById('updated-display');
+  if(upd)upd.textContent='Cached '+new Date(cache.updatedAt).toLocaleString();
+  const pd=document.getElementById('price-display');
+  if(pd&&cache.btcPrice)pd.textContent='BTC $'+Number(cache.btcPrice).toLocaleString(undefined,{maximumFractionDigits:0});
+  const rd=document.getElementById('realized-display');
+  if(rd&&cache.realizedProxy)rd.textContent='Realized proxy $'+Math.round(cache.realizedProxy).toLocaleString();
+  return true;
+}
+function currentScheduleAnchor(){
+  const p=ptParts();
+  const utcGuess=(hour)=>new Date(Date.UTC(p.y,p.m-1,p.d,hour+8,0,0)).getTime(); // PT -> UTC approximation, ok for local freshness windows
+  if(p.h>=20)return utcGuess(20);
+  if(p.h>=8)return utcGuess(8);
+  const y=new Date(Date.UTC(p.y,p.m-1,p.d));y.setUTCDate(y.getUTCDate()-1);
+  return Date.UTC(y.getUTCFullYear(),y.getUTCMonth(),y.getUTCDate(),20+8,0,0);
+}
+function cacheIsFreshForWindow(cache=getCycleCache()){return !!(cache&&cache.updatedAt&&cache.updatedAt>=currentScheduleAnchor());}
+async function smartRefreshCycle(force=false){
+  const cache=getCycleCache();
+  if(!force&&cacheIsFreshForWindow(cache)){applyCycleCache(cache);updateQuotaDisplay('using scheduled cache');return;}
+  if(bgRemaining()<BG_CALLS_PER_FULL_REFRESH){
+    if(applyCycleCache(cache)){updateQuotaDisplay('quota preserved/exhausted');return;}
+    document.getElementById('status-msg').textContent='Not enough BGeometrics calls left today for a full refresh.';return;
+  }
+  await refreshAll();
+}
+function forceRefreshAll(){
+  if(bgRemaining()<BG_CALLS_PER_FULL_REFRESH){alert('Not enough BGeometrics calls left today for a full refresh.');return;}
+  if(confirm('Force refresh uses 3 of your 15 daily BGeometrics calls. Continue?'))smartRefreshCycle(true);
+}
 const INDS=[
   {id:'mvrvZ',label:'MVRV Z-Score',     src:'BGeometrics',   sc:'#378ADD',w:0.25,ep:'mvrv-zscore'},
   {id:'puell',label:'Puell Multiple',   src:'BGeometrics',   sc:'#378ADD',w:0.22,ep:'puell-multiple'},
@@ -221,16 +384,22 @@ function getVal(json){
 function switchTab(t){
   document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
-  document.querySelector(`.tab[onclick="switchTab('${t}')"]`).classList.add('active');
-  document.getElementById('tab-'+t).classList.add('active');
-  if(t==='brief'&&document.getElementById('brief-content').style.display==='none'){loadBrief();}
+  const tab=document.querySelector(`.tab[onclick="switchTab('${t}')"]`);
+  if(tab)tab.classList.add('active');
+  const content=document.getElementById('tab-'+t);
+  if(content)content.classList.add('active');
+  if(t==='brief'&&document.getElementById('brief-content').style.display==='none')loadBrief();
+  if(t==='cycle')smartRefreshCycle(false);
 }
 
 async function bgCall(ep){
-  const r=await fetch(`https://api.bgeometrics.com/v1/${ep}?limit=1`,{headers:{'x-api-key':S.key}});
-  if(!r.ok)throw new Error('BG '+r.status);
-  S.calls++;
-  document.getElementById('calls-display').textContent=(15-S.calls)+' API calls left today';
+  const r=await fetch(`/api/bgeometrics?endpoint=${encodeURIComponent(ep)}`);
+  if(!r.ok){
+    let msg='BG proxy '+r.status;
+    try{const d=await r.json(); if(d && d.error) msg=d.error;}catch(e){}
+    throw new Error(msg);
+  }
+  addBgUsage(1);
   return r.json();
 }
 
@@ -261,7 +430,7 @@ function updateGauge(vals){
   document.getElementById('score-lbl').style.color=c;
   document.getElementById('needle').style.left=comp+'%';
   document.getElementById('needle').style.background=c;
-  window._cycleScore={score:comp,color:c,label:zlbl(comp)};
+  window._cycleScore={score:comp,color:c,label:zlbl(comp)}; try{renderOpportunities();renderPortfolio();}catch(e){}
 }
 
 async function refreshAll(){
@@ -282,35 +451,24 @@ async function refreshAll(){
     document.getElementById('price-display').textContent='BTC $'+btcPrice.toLocaleString(undefined,{maximumFractionDigits:0});
     document.getElementById('realized-display').textContent='Realized proxy $'+Math.round(rp).toLocaleString();
     window._btcPrice=btcPrice;
+    window._realizedProxy=rp;
     renderCards(vals);updateGauge(vals);
   }).catch(()=>{});
   await Promise.all([p1,p2,p3,p4,p5]);
+  cacheCycle(vals,{source:'live'});
   document.getElementById('updated-display').textContent='Updated '+new Date().toLocaleTimeString();
+  updateQuotaDisplay('next scheduled refresh: 8 AM / 8 PM PT');
 }
 
 async function startFetch(){
-  const key=document.getElementById('api-input').value.trim();
-  if(!key){document.getElementById('status-msg').textContent='Please enter your API key.';return;}
-  S.key=key;S.calls=0;
-  document.getElementById('status-msg').textContent='Verifying key...';
-  try{
-    const t=await fetch(`https://api.bgeometrics.com/v1/nupl?limit=1`,{headers:{'x-api-key':key}});
-    if(!t.ok){document.getElementById('status-msg').textContent='Auth failed ('+t.status+'). Check your key.';return;}
-    S.calls++;
-    document.getElementById('setup-panel').style.display='none';
-    document.getElementById('dashboard').style.display='block';
-    document.getElementById('calls-display').textContent=(15-S.calls)+' API calls left today';
-    refreshAll();
-  }catch(e){document.getElementById('status-msg').textContent='Connection error — host this file on a web server or Carrd to fix CORS.';}
+  document.getElementById('setup-panel').style.display='none';
+  document.getElementById('dashboard').style.display='block';
+  const status=document.getElementById('status-msg');
+  if(status)status.textContent='';
+  updateQuotaDisplay('smart cache active: 8 AM / 8 PM PT');
+  try{await smartRefreshCycle(false);}catch(e){if(status)status.textContent='Connection/auth error. Cached data will be used when available.';applyCycleCache();}
 }
-function resetKey(){
-  S.key='';S.calls=0;
-  document.getElementById('dashboard').style.display='none';
-  document.getElementById('setup-panel').style.display='block';
-  document.getElementById('api-input').value='';
-  document.getElementById('status-msg').textContent='';
-}
-document.getElementById('api-input').addEventListener('keydown',e=>{if(e.key==='Enter')startFetch();});
+function resetKey(){startFetch();}
 
 async function loadBrief(){
   const btn=document.getElementById('brief-refresh-btn');
@@ -322,8 +480,8 @@ async function loadBrief(){
   let fg=null,btcP=null,ethP=null,btcChg=null,ethChg=null,ma200=null,rpProxy=null;
   try{const r=await fetch('https://api.alternative.me/fng/?limit=1');const d=await r.json();fg=parseInt(d.data[0].value);}catch(e){}
   try{
-    const r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true');
-    const d=await r.json();btcP=d.bitcoin?.usd;ethP=d.ethereum?.usd;btcChg=d.bitcoin?.usd_24h_change;ethChg=d.ethereum?.usd_24h_change;
+    const r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum-classic&vs_currencies=usd&include_24hr_change=true');
+    const d=await r.json();btcP=d.bitcoin?.usd;ethP=d['ethereum-classic']?.usd;btcChg=d.bitcoin?.usd_24h_change;ethChg=d['ethereum-classic']?.usd_24h_change;
   }catch(e){}
   try{
     const r=await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=400&interval=daily');
@@ -346,12 +504,17 @@ async function loadBrief(){
         <div class="score-mini-num" style="color:${scoreCol};">${scoreNum}</div>
         <div>
           <div style="font-size:12px;color:${scoreCol};letter-spacing:0.12em;margin-bottom:4px;">${scoreLbl}</div>
-          <div style="font-size:11px;color:#5a5d8a;">BTC ${btcP?'$'+btcP.toLocaleString(undefined,{maximumFractionDigits:0}):'—'}${chgStr(btcChg)} · ETH ${ethP?'$'+ethP.toLocaleString(undefined,{maximumFractionDigits:0}):'—'}${chgStr(ethChg)}</div>
+          <div style="font-size:11px;color:#5a5d8a;">BTC ${btcP?'$'+btcP.toLocaleString(undefined,{maximumFractionDigits:0}):'—'}${chgStr(btcChg)} · ETC ${ethP?'$'+ethP.toLocaleString(undefined,{maximumFractionDigits:2}):'—'}${chgStr(ethChg)}</div>
           <div style="font-size:11px;color:#5a5d8a;margin-top:3px;">${maAbove} · Realized proxy ${rpProxy?'$'+Math.round(rpProxy).toLocaleString():'—'}</div>
           <div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Fear & Greed <span style="color:${fgCol};">${fg!==null?fg+' / 100 ('+fgLbl+')':'—'}</span></div>
         </div>
       </div>
-      <p style="font-size:10px;color:#2a2d50;font-style:italic;">For full on-chain breakdown open the BTC Score tab and load your API key.</p>
+      <p style="font-size:10px;color:#2a2d50;font-style:italic;">For full on-chain breakdown open the BTC Score tab. BGeometrics runs through the Vercel proxy.</p>
+    </div>
+    <div class="card">
+      <p class="section-label" style="margin-bottom:14px;">🎯 TOP OPPORTUNITY / RESERVE PLAN</p>
+      <div id="brief-opportunity-mini"></div>
+      <p style="font-size:10px;color:#2a2d50;font-style:italic;margin-top:10px;">Open the Opportunities tab for expandable rationale and full ranking.</p>
     </div>
     <div class="card">
       <p class="section-label" style="margin-bottom:14px;">₿ CRYPTO HEADLINES</p>
@@ -420,13 +583,198 @@ async function loadBrief(){
     </div>
     <p class="footer-note">Not financial advice · Prices: CoinGecko · Sentiment: Alternative.me · News refreshes on demand</p>
   `;
+  try{const top=[...WATCHLIST].map(i=>({...i,score:opportunityScore(i)})).sort((a,b)=>b.score-a.score)[0];const act=actionFor(top.score,top.thesis,top.confidence);const d=deploymentForScore(currentCycleScore());document.getElementById('brief-opportunity-mini').innerHTML=`<div class="score-mini"><div class="score-mini-num" style="color:${act.color};">${top.score}</div><div><div style="font-size:12px;color:${act.color};letter-spacing:0.12em;margin-bottom:4px;">${top.ticker} · ${act.label}</div><div style="font-size:11px;color:#5a5d8a;line-height:1.6;">Down ${pct(top.drop)} · ${top.reason}</div><div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Reserve suggestion: ${money(d.amount)} if BTC Score and price drawdown triggers are both met.</div></div></div>`;}catch(e){}
   document.getElementById('brief-loading').style.display='none';
   document.getElementById('brief-content').style.display='block';
   btn.disabled=false;btn.textContent='↻ Refresh Brief';
 }
 
-document.getElementById('brief-date').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-loadBrief();
+
+
+const RESERVE_TOTAL=300000;
+const BASE_DCA={BTC:250,ETC:50};
+const WATCHLIST=[
+  {ticker:'BTC',name:'Bitcoin',type:'crypto',drop:-6.2,reason:'Fear-driven crypto drawdown / ETF flow pressure placeholder',thesis:96,confidence:82,quality:95,newsSeverity:35},
+  {ticker:'ETC',name:'Ethereum Classic',type:'crypto',drop:-5.4,reason:'Broad crypto weakness; higher beta than BTC',thesis:68,confidence:58,quality:62,newsSeverity:42},
+  {ticker:'NVDA',name:'NVIDIA',type:'stock',drop:-5.8,reason:'Example: export restriction / AI capex concern',thesis:91,confidence:78,quality:96,newsSeverity:38},
+  {ticker:'AVGO',name:'Broadcom',type:'stock',drop:-4.9,reason:'Example: earnings volatility / valuation reset',thesis:88,confidence:70,quality:92,newsSeverity:32},
+  {ticker:'COIN',name:'Coinbase',type:'stock',drop:-8.4,reason:'Crypto sentiment and BTC-linked equity pressure',thesis:78,confidence:66,quality:74,newsSeverity:50},
+  {ticker:'MSTR',name:'MicroStrategy',type:'stock',drop:-9.8,reason:'BTC beta and treasury-premium compression',thesis:64,confidence:55,quality:58,newsSeverity:56}
+];
+const FEATURES=[
+  {name:'Opportunity Feed',status:'YES',body:'Ranks BTC, ETC, and watchlist stocks by Opportunity Score. Surfaces only useful buy/watch/avoid candidates rather than ticker noise.',data:'Live price, 24h/7d change, confirmed news trigger, cycle score, watchlist fundamentals.',difficulty:'Medium'},
+  {name:'Why Is It Down?',status:'YES',body:'Expandable explanation of the bad news, how much the asset is down, and whether the drop appears temporary or thesis-breaking.',data:'News feed + price move + confidence tagging.',difficulty:'Medium'},
+  {name:'Thesis Integrity Score',status:'YES',body:'Separates a normal panic selloff from a business/model impairment. For stocks, this should consider growth, FCF, debt, moat, valuation, and management credibility.',data:'Fundamental snapshots and manual watchlist assumptions in V1.',difficulty:'Medium'},
+  {name:'Confidence Score',status:'YES',body:'Shows how reliable the recommendation is. A high Opportunity Score with low confidence should become Watch, not Buy.',data:'News quality, consistency across sources, price move magnitude, historical precedent.',difficulty:'Medium'},
+  {name:'Watchlist Management',status:'YES',body:'Separates what you own from what you are willing to buy. This lets the app surface attractive companies you do not already hold.',data:'Curated tickers and manual thesis notes.',difficulty:'Low'},
+  {name:'Historical Opportunity Tracker',status:'YES',body:'Stores every alert/recommendation so you can review 30/90/180-day outcomes and improve the rules over time.',data:'Date, asset, score, action, amount, price, news trigger.',difficulty:'Medium'},
+  {name:'Panic Severity Meter',status:'MAYBE',body:'Measures how intense the selloff/news cycle is. Useful later, but less essential than Opportunity Score and thesis checks.',data:'Price drop, volatility, sentiment, headlines, social/news intensity.',difficulty:'Medium'}
+];
+
+function money(n){return '$'+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});}
+function pct(n){return (Number(n)>=0?'+':'')+Number(n||0).toFixed(1)+'%';}
+function actionFor(score,thesis,confidence){
+  if(thesis<50)return {label:'TOO RISKY',color:'#A32D2D'};
+  if(score>=80&&confidence>=65)return {label:'BUY',color:'#1D9E75'};
+  if(score>=60)return {label:'WATCH',color:'#BA7517'};
+  if(score>=40)return {label:'AVOID',color:'#E24B4A'};
+  return {label:'TOO RISKY',color:'#A32D2D'};
+}
+function currentCycleScore(){return window._cycleScore?.score ?? null;}
+function deploymentForScore(score){
+  if(score===null||score>20)return {zone:'DCA ONLY',amount:0,percent:0,copy:'Reserve inactive. Continue base DCA only.'};
+  if(score>15)return {zone:'FIRST ALLOCATION',amount:30000,percent:10,copy:'Score below 20. Deploy first 10% reserve tranche if BTC is also 15–20% below recent high.'};
+  if(score>10)return {zone:'AGGRESSIVE ALLOCATION',amount:60000,percent:20,copy:'Score below 15. Deploy next 20% reserve tranche if price-confirmed.'};
+  if(score>5)return {zone:'MAJOR ALLOCATION',amount:90000,percent:30,copy:'Score below 10. Major panic-buy zone if price-confirmed.'};
+  return {zone:'MAXIMUM OPPORTUNITY',amount:120000,percent:40,copy:'Score below 5. Deploy remaining reserve tranche, assuming no structural BTC thesis break.'};
+}
+function opportunityScore(item){
+  const cycle=currentCycleScore();
+  const dropScore=Math.min(100,Math.max(0,Math.abs(item.drop)*8));
+  const cycleBoost=item.type==='crypto'&&cycle!==null ? Math.max(0,100-cycle*3) : 55;
+  const newsOpportunity=Math.max(0,100-item.newsSeverity);
+  return Math.round(dropScore*0.20 + item.quality*0.25 + item.thesis*0.25 + item.confidence*0.15 + (item.type==='crypto'?cycleBoost:newsOpportunity)*0.15);
+}
+function renderReserveLadder(){
+  const score=currentCycleScore();
+  const d=deploymentForScore(score);
+  const rows=[
+    ['>20','DCA only','$0'],['15–20','First allocation','$30,000'],['10–15','Aggressive allocation','$60,000'],['5–10','Major allocation','$90,000'],['<5','Maximum opportunity','$120,000']
+  ];
+  document.getElementById('opp-cycle-score').textContent=score===null?'—':score;
+  document.getElementById('opp-cycle-score').style.color=score===null?'#3a3d6a':col(score);
+  document.getElementById('opp-cycle-zone').textContent=d.zone;
+  document.getElementById('opp-cycle-zone').style.color=score===null?'#6a6d9a':col(score);
+  document.getElementById('opp-deploy-note').innerHTML=`Base DCA: <strong style="color:#c8caee;">$${BASE_DCA.BTC} BTC / $${BASE_DCA.ETC} ETC</strong>. ${d.copy} Suggested reserve deploy now: <strong style="color:#c8caee;">${money(d.amount)}</strong>.`;
+  document.getElementById('reserve-ladder').innerHTML=rows.map(r=>{
+    const active=(score!==null&&((r[0]==='>20'&&score>20)||(r[0]==='15–20'&&score<=20&&score>15)||(r[0]==='10–15'&&score<=15&&score>10)||(r[0]==='5–10'&&score<=10&&score>5)||(r[0]==='<5'&&score<=5)));
+    return `<div class="ladder-row ${active?'active':''}"><strong>${r[0]}</strong><span>${r[1]}</span><span>${r[2]}</span></div>`;
+  }).join('');
+}
+function toggleCard(el){el.closest('.op-card').classList.toggle('open');}
+function renderOpportunities(){
+  renderReserveLadder();
+  const sorted=[...WATCHLIST].map(i=>({...i,score:opportunityScore(i)})).sort((a,b)=>b.score-a.score);
+  document.getElementById('opportunity-list').innerHTML=sorted.map(item=>{
+    const a=actionFor(item.score,item.thesis,item.confidence);
+    return `<div class="op-card">
+      <div class="op-head" onclick="toggleCard(this)">
+        <div>
+          <div class="op-ticker">${item.ticker} <span style="font-size:10px;color:#3a3d6a;">${item.name}</span></div>
+          <div class="op-sub">Down ${pct(item.drop)} · ${item.reason}</div>
+        </div>
+        <div>
+          <div class="op-score" style="color:${a.color};">${item.score}</div>
+          <div class="op-label" style="color:${a.color};">${a.label}</div>
+        </div>
+      </div>
+      <div class="op-details">
+        <div class="detail-grid">
+          <div class="detail-box"><div class="detail-label">WHY IS IT DOWN?</div><div class="detail-text">${item.reason}. Confirm live news before acting; this V2 prototype uses placeholder news logic until a live news API is added.</div></div>
+          <div class="detail-box"><div class="detail-label">THESIS INTEGRITY</div><div class="detail-text">${item.thesis}/100 · ${item.thesis>=80?'Thesis appears intact.':item.thesis>=60?'Some risk; monitor before sizing up.':'Potential impairment; avoid or keep small.'}</div></div>
+          <div class="detail-box"><div class="detail-label">CONFIDENCE</div><div class="detail-text">${item.confidence}/100 · Based on signal strength, price move, and news severity assumptions.</div></div>
+          <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text">Primary ranking is Opportunity Score. Secondary action is ${a.label}. For BTC/ETC, reserve capital requires BTC Score below 20 plus a 15–20% drawdown from recent high.</div></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  renderFeatureDecisions();
+}
+function renderFeatureDecisions(){
+  document.getElementById('feature-decisions').innerHTML=FEATURES.map(f=>`<div class="op-card">
+    <div class="op-head" onclick="toggleCard(this)"><div><div class="op-ticker">${f.name}</div><div class="op-sub">${f.status} · click to expand</div></div><div class="op-label" style="color:${f.status==='MAYBE'?'#BA7517':'#1D9E75'};">${f.status}</div></div>
+    <div class="op-details"><div class="detail-grid"><div class="detail-box"><div class="detail-label">WHAT IT DOES</div><div class="detail-text">${f.body}</div></div><div class="detail-box"><div class="detail-label">DATA NEEDED</div><div class="detail-text">${f.data}</div></div><div class="detail-box"><div class="detail-label">V1 DIFFICULTY</div><div class="detail-text">${f.difficulty}</div></div></div></div>
+  </div>`).join('');
+}
+
+function portfolio(){try{return JSON.parse(localStorage.getItem('portfolioHoldings')||'[]');}catch(e){return [];}}
+function savePortfolio(rows){localStorage.setItem('portfolioHoldings',JSON.stringify(rows));renderPortfolio();}
+function addHolding(){
+  const sym=document.getElementById('h-symbol').value.trim().toUpperCase();
+  const qty=parseFloat(document.getElementById('h-qty').value);
+  const cost=parseFloat(document.getElementById('h-cost').value);
+  const price=parseFloat(document.getElementById('h-price').value);
+  if(!sym||isNaN(qty)||isNaN(price)){document.getElementById('portfolio-strategy').textContent='Enter at least symbol, quantity, and current price.';return;}
+  const rows=portfolio().filter(r=>r.symbol!==sym);
+  rows.push({symbol:sym,qty,cost:isNaN(cost)?0:cost,price});
+  savePortfolio(rows);
+  ['h-symbol','h-qty','h-cost','h-price'].forEach(id=>document.getElementById(id).value='');
+}
+function clearPortfolio(){if(confirm('Clear all locally stored portfolio holdings?'))savePortfolio([]);}
+function renderPortfolio(){
+  const rows=portfolio();
+  const total=rows.reduce((a,r)=>a+(Number(r.qty||0)*Number(r.price||0)),0);
+  document.getElementById('portfolio-summary').innerHTML=rows.length?`<div class="grid-2"><div class="detail-box"><div class="detail-label">TOTAL CURRENT VALUE</div><div class="detail-text" style="font-size:18px;color:#c8caee;">${money(total)}</div></div><div class="detail-box"><div class="detail-label">HOLDINGS</div><div class="detail-text" style="font-size:18px;color:#c8caee;">${rows.length}</div></div></div>`:'<div class="explain-body">No holdings loaded yet.</div>';
+  document.getElementById('portfolio-table').innerHTML=rows.length?`<thead><tr><th>Symbol</th><th>Qty</th><th>Avg Cost</th><th>Price</th><th>Value</th><th>Allocation</th><th>Gain/Loss</th></tr></thead><tbody>${rows.map(r=>{
+    const value=r.qty*r.price, basis=r.qty*(r.cost||0), gl=value-basis, alloc=total?value/total*100:0;
+    return `<tr><td><strong>${r.symbol}</strong></td><td>${Number(r.qty).toLocaleString()}</td><td>${r.cost?money(r.cost):'—'}</td><td>${money(r.price)}</td><td>${money(value)}</td><td>${alloc.toFixed(1)}%</td><td style="color:${gl>=0?'#1D9E75':'#E24B4A'};">${r.cost?money(gl):'—'}</td></tr>`;
+  }).join('')}</tbody>`:'';
+  const btc=rows.find(r=>r.symbol==='BTC'), etc=rows.find(r=>r.symbol==='ETC');
+  const score=currentCycleScore();
+  const d=deploymentForScore(score);
+  let msg=[];
+  if(score===null)msg.push('Load the BTC Score tab to generate cycle-aware reserve deployment guidance.');
+  else if(score>20)msg.push(`BTC Score ${score}: DCA only. Continue $${BASE_DCA.BTC} BTC / $${BASE_DCA.ETC} ETC.`);
+  else msg.push(`BTC Score ${score}: ${d.zone}. If BTC is also 15–20% below recent high, suggested reserve deployment is ${money(d.amount)}.`);
+  if(btc&&total){msg.push(`BTC allocation is ${((btc.qty*btc.price)/total*100).toFixed(1)}% of loaded portfolio.`);}else msg.push('BTC holding not loaded yet.');
+  if(etc&&total){msg.push(`ETC allocation is ${((etc.qty*etc.price)/total*100).toFixed(1)}% of loaded portfolio.`);}else msg.push('ETC holding not loaded yet.');
+  document.getElementById('portfolio-strategy').innerHTML=msg.map(m=>`<div class="metric-row"><span>${m}</span></div>`).join('');
+}
+function parseCSV(text){
+  const rows=[];let cur='',row=[],q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i],n=text[i+1];
+    if(c==='"'&&q&&n==='"'){cur+='"';i++;}
+    else if(c==='"'){q=!q;}
+    else if(c===','&&!q){row.push(cur);cur='';}
+    else if((c==='\n'||c==='\r')&&!q){
+      if(cur||row.length){row.push(cur);rows.push(row);row=[];cur='';}
+      if(c==='\r'&&n==='\n')i++;
+    } else cur+=c;
+  }
+  if(cur||row.length){row.push(cur);rows.push(row);}
+  return rows;
+}
+function norm(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
+function importPortfolioCSV(e){
+  const file=e.target.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const rows=parseCSV(ev.target.result).filter(r=>r.some(c=>String(c).trim()));
+    if(rows.length<2){document.getElementById('csv-status').textContent='Could not read CSV rows.';return;}
+    const header=rows[0].map(norm);
+    const find=(names)=>header.findIndex(h=>names.some(n=>h.includes(n)));
+    const iSym=find(['symbol','ticker']), iQty=find(['quantity','qty','shares']), iCost=find(['costbasis','averagecost','avgcost']), iVal=find(['currentvalue','marketvalue','value']), iPrice=find(['lastprice','price']);
+    if(iSym<0||iQty<0){document.getElementById('csv-status').textContent='Could not find Symbol and Quantity columns. Try a positions CSV export.';return;}
+    const imported=[];
+    rows.slice(1).forEach(r=>{
+      const symbol=String(r[iSym]||'').trim().toUpperCase();
+      const qty=parseFloat(String(r[iQty]||'').replace(/[$,%]/g,''));
+      const cost=iCost>=0?parseFloat(String(r[iCost]||'').replace(/[$,%]/g,'')):0;
+      let price=iPrice>=0?parseFloat(String(r[iPrice]||'').replace(/[$,%]/g,'')):NaN;
+      if(isNaN(price)&&iVal>=0&&!isNaN(qty)&&qty!==0){price=parseFloat(String(r[iVal]||'').replace(/[$,%]/g,''))/qty;}
+      if(symbol&&!isNaN(qty)&&!isNaN(price))imported.push({symbol,qty,cost:isNaN(cost)?0:cost,price});
+    });
+    if(!imported.length){document.getElementById('csv-status').textContent='CSV loaded, but no usable holdings were found.';return;}
+    savePortfolio(imported);
+    document.getElementById('csv-status').textContent=`Imported ${imported.length} holdings from ${file.name}. Stored locally in this browser.`;
+  };
+  reader.readAsText(file);
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  try{document.getElementById('brief-date').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});}catch(e){}
+  try{updateQuotaDisplay('smart cache active: 8 AM / 8 PM PT');}catch(e){}
+  try{applyCycleCache();}catch(e){}
+  try{renderOpportunities();}catch(e){}
+  try{renderPortfolio();}catch(e){}
+  try{loadBrief();}catch(e){
+    const loading=document.getElementById('brief-loading');
+    const content=document.getElementById('brief-content');
+    if(loading)loading.style.display='none';
+    if(content){content.style.display='block';content.innerHTML='<div class="card"><p class="section-label">DAILY BRIEF</p><p style="font-size:12px;color:#5a5d8a;line-height:1.7;">Brief could not load. Check the browser console or API connection.</p></div>';}
+  }
+});
 </script>
 </body>
 </html>
