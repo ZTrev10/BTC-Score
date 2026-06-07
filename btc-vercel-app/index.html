@@ -37,12 +37,15 @@ body{background:#07080f;color:#e0e0f0;font-family:'DM Mono','Courier New',monosp
 .ind-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-bottom:12px;}
 .ind-card{background:#0d0e1a;border:1px solid #1e2040;border-radius:8px;padding:9px 10px;transition:border-color 0.2s;}
 .ind-card:hover{border-color:#2a2d50;}
+.ind-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+.ind-meta{min-width:0;}
 .ind-src{font-size:8px;color:#2a2d50;letter-spacing:0.1em;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.ind-name{font-size:10px;color:#5a5d8a;margin-bottom:3px;line-height:1.25;}
-.ind-val{font-family:'Bebas Neue',sans-serif;font-size:24px;line-height:0.95;letter-spacing:0.03em;transition:color 0.6s;color:#3a3d6a;}
-.ind-bar-bg{height:3px;background:#1a1c30;border-radius:2px;margin:6px 0;}
+.ind-name{font-size:10px;color:#5a5d8a;line-height:1.25;}
+.ind-val{font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:0.95;letter-spacing:0.03em;transition:color 0.6s;color:#3a3d6a;text-align:right;white-space:nowrap;}
+.ind-score{font-size:9px;line-height:1;text-align:right;margin-top:3px;letter-spacing:0.08em;}
+.ind-bar-bg{height:3px;background:#1a1c30;border-radius:2px;margin:7px 0 5px;}
 .ind-bar-fill{height:3px;border-radius:2px;transition:width 1s ease,background 0.6s;}
-.ind-ctx{font-size:9px;color:#4a4d7a;line-height:1.45;margin-top:5px;padding-top:5px;border-top:1px solid #1a1c30;}
+.ind-ctx{font-size:9px;color:#4a4d7a;line-height:1.35;margin-top:5px;padding-top:5px;border-top:1px solid #1a1c30;}
 .collapse-card{padding:0;overflow:hidden;}
 .collapse-card summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
 .collapse-card summary::-webkit-details-marker{display:none;}
@@ -189,8 +192,8 @@ td strong{color:#c8caee;font-weight:500;}
             <span class="pill" style="color:#A32D2D;border-color:#A32D2D;">76–100 Avoid</span>
           </div>
           <div class="src-legend">
-            <span style="font-size:11px;color:#3a3d6a;"><span class="src-dot" style="background:#378ADD;"></span>BGeometrics via Vercel proxy (4 calls)</span>
-            <span style="font-size:11px;color:#3a3d6a;"><span class="src-dot" style="background:#1D9E75;"></span>Free / unlimited</span>
+            <span style="font-size:11px;color:#3a3d6a;"><span class="src-dot" style="background:#378ADD;"></span>BGeometrics via Vercel proxy (3 calls)</span>
+            <span style="font-size:11px;color:#3a3d6a;"><span class="src-dot" style="background:#1D9E75;"></span>Free / derived</span>
           </div>
           <p style="font-size:10px;color:#2a2d50;margin-top:8px;line-height:1.6;">Lower = historically better buy zone. On-chain data updates daily — 1–2 refreshes/day is sufficient.</p>
         </div>
@@ -262,8 +265,8 @@ td strong{color:#c8caee;font-weight:500;}
         <div class="explain-body">Net Unrealized Profit/Loss across all holders. Below 0 = most holders underwater (capitulation) — rare and historically a powerful buy signal. Above 0.75 = euphoria, distribution tends to follow.</div>
       </div>
       <div class="explain-row">
-        <div class="explain-title">Price vs Realized Price <span class="explain-src-tag">· BGeometrics / NUPL-derived fallback</span></div>
-        <div class="explain-body">Realized Price = average cost basis of all Bitcoin. When spot drops below it, the average holder is at a loss. The app uses actual BGeometrics realized price when available; if not, it derives the premium from NUPL so the sign stays consistent with on-chain profit/loss.</div>
+        <div class="explain-title">Price vs Realized Price <span class="explain-src-tag">· NUPL-derived</span></div>
+        <div class="explain-body">Realized Price = average cost basis of all Bitcoin. When spot drops below it, the average holder is at a loss. The app derives this from NUPL by default, which keeps the sign consistent with on-chain profit/loss and avoids spending an extra BGeometrics call.</div>
       </div>
       <div class="explain-row">
         <div class="explain-title">Sentiment Overlay / Fear & Greed <span class="explain-src-tag">· Alternative.me</span></div>
@@ -539,7 +542,7 @@ td strong{color:#c8caee;font-weight:500;}
 window.APP_VERSION = "v2.3.1-source-reset-2026-06-06";
 const S={key:'',calls:0};
 const BG_DAILY_LIMIT=15;
-const BG_CALLS_PER_FULL_REFRESH=4;
+const BG_CALLS_PER_FULL_REFRESH=3;
 const BG_CACHE_KEY='trevor_btc_cycle_cache_v3';
 const BG_ENDPOINT_CACHE_KEY='trevor_bgeometrics_endpoint_cache_v1';
 const BG_USAGE_KEY='trevor_bgeometrics_usage_v1';
@@ -561,7 +564,11 @@ function updateQuotaDisplay(extra=''){
 }
 function cacheCycle(vals,meta={}){
   vals=sanitizedCycleVals(vals);
-  localStorage.setItem(BG_CACHE_KEY,JSON.stringify({vals,btcPrice:window._btcPrice||null,realizedProxy:window._realizedProxy||null,advancedCycle:window._advancedCycle||null,updatedAt:Date.now(),...meta}));
+  const btcPrice=window._btcPrice||null;
+  const derivedRealized=(Number.isFinite(btcPrice)&&Number.isFinite(vals.rvp))?btcPrice/(1+vals.rvp/100):null;
+  const realizedProxy=Number.isFinite(derivedRealized)?derivedRealized:(window._realizedProxy||null);
+  if(Number.isFinite(realizedProxy))window._realizedProxy=realizedProxy;
+  localStorage.setItem(BG_CACHE_KEY,JSON.stringify({vals,btcPrice,realizedProxy,advancedCycle:window._advancedCycle||null,updatedAt:Date.now(),...meta}));
 }
 function getCycleCache(){try{return JSON.parse(localStorage.getItem(BG_CACHE_KEY)||'null');}catch(e){return null;}}
 function getBgEndpointCache(){try{return JSON.parse(localStorage.getItem(BG_ENDPOINT_CACHE_KEY)||'{}');}catch(e){return {};}}
@@ -605,7 +612,13 @@ function applyCycleCache(cache=getCycleCache()){
   const pd=document.getElementById('price-display');
   if(pd&&cache.btcPrice)pd.textContent='BTC $'+Number(cache.btcPrice).toLocaleString(undefined,{maximumFractionDigits:0});
   const rd=document.getElementById('realized-display');
-  if(rd&&cache.realizedProxy)rd.textContent='Realized proxy $'+Math.round(cache.realizedProxy).toLocaleString();
+  if(rd&&cache.btcPrice&&Number.isFinite(cache.vals.rvp)){
+    const realized=cache.btcPrice/(1+cache.vals.rvp/100);
+    if(Number.isFinite(realized)){
+      window._realizedProxy=realized;
+      rd.textContent='NUPL-implied realized price $'+Math.round(realized).toLocaleString();
+    }
+  }else if(rd&&cache.realizedProxy)rd.textContent='NUPL-implied realized price $'+Math.round(cache.realizedProxy).toLocaleString();
   return true;
 }
 function currentScheduleAnchor(){
@@ -652,7 +665,7 @@ const INDS=[
   {id:'mvrvZ',label:'MVRV Z-Score',     src:'BGeometrics',   sc:'#378ADD',w:0.22,ep:'mvrv-zscore'},
   {id:'puell',label:'Puell Multiple',   src:'BGeometrics',   sc:'#378ADD',w:0.18,ep:'puell-multiple'},
   {id:'nupl', label:'NUPL',             src:'BGeometrics',   sc:'#378ADD',w:0.20,ep:'nupl'},
-  {id:'rvp',  label:'Price vs Realized',src:'BGeometrics',sc:'#378ADD',w:0.16},
+  {id:'rvp',  label:'Price vs Realized',src:'NUPL-derived',sc:'#378ADD',w:0.16},
   {id:'fg',   label:'Sentiment Overlay', src:'Alternative.me',sc:'#1D9E75',w:0.08},
   {id:'ma',   label:'vs 200-Week MA',   src:'CoinGecko',     sc:'#1D9E75',w:0.16},
 ];
@@ -785,9 +798,16 @@ function renderCards(vals){
   document.getElementById('ind-grid').innerHTML=INDS.map(ind=>{
     const v=vals[ind.id],s=sc(ind.id,v),c=(v!==null&&!isNaN(v))?col(s):'#3a3d6a';
     return`<div class="ind-card">
-      <div class="ind-src"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${ind.sc};margin-right:5px;vertical-align:middle;"></span>${ind.src}</div>
-      <div class="ind-name">${ind.label}</div>
-      <div class="ind-val" style="color:${c};">${fmt(ind.id,v)}</div>
+      <div class="ind-head">
+        <div class="ind-meta">
+          <div class="ind-src"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${ind.sc};margin-right:5px;vertical-align:middle;"></span>${ind.src}</div>
+          <div class="ind-name">${ind.label}</div>
+        </div>
+        <div>
+          <div class="ind-val" style="color:${c};">${fmt(ind.id,v)}</div>
+          <div class="ind-score" style="color:${c};">${(v!==null&&!isNaN(v))?s:'—'} / 100</div>
+        </div>
+      </div>
       <div class="ind-bar-bg"><div class="ind-bar-fill" style="width:${(v!==null&&!isNaN(v))?s:50}%;background:${c};"></div></div>
       <div class="ind-ctx">${ctx(ind.id,v)}</div>
     </div>`;
@@ -897,15 +917,14 @@ function rvpFromNupl(nupl){
 }
 function chooseRealizedPremium(vals,btcPrice){
   const implied=rvpFromNupl(vals.nupl);
+  if(Number.isFinite(implied)&&Number.isFinite(btcPrice)){
+    return {rvp:implied,realized:btcPrice/(1+implied/100),source:'NUPL-implied realized price'};
+  }
   const actual=Number.isFinite(window._realizedPrice)&&window._realizedPrice>0&&Number.isFinite(btcPrice)
     ? ((btcPrice-window._realizedPrice)/window._realizedPrice)*100
     : null;
   if(Number.isFinite(actual)){
-    const signsConflict=Number.isFinite(implied)&&Math.sign(actual)!==Math.sign(implied)&&Math.abs(implied)>5;
-    if(!signsConflict)return {rvp:actual,realized:window._realizedPrice,source:'BGeometrics realized price'};
-  }
-  if(Number.isFinite(implied)&&Number.isFinite(btcPrice)){
-    return {rvp:implied,realized:btcPrice/(1+implied/100),source:'NUPL-implied realized price'};
+    return {rvp:actual,realized:window._realizedPrice,source:'BGeometrics realized price'};
   }
   return {rvp:null,realized:null,source:'Realized price unavailable'};
 }
@@ -1029,8 +1048,6 @@ function hydrateScoreFromCachedBg(){
     const cached=cachedBgMetric(i.id,i.ep);
     if(cached)vals[i.id]=cached.value;
   });
-  const realizedCached=cachedBgMetric('realizedPrice','realized-price');
-  if(realizedCached)window._realizedPrice=realizedCached.value;
   renderCards(vals);
   updateGauge(vals);
   cacheCycle(vals,{source:'cached-bg-debug'});
@@ -1087,17 +1104,8 @@ async function refreshAll(){
   const p1=loadBgMetric('mvrvZ','mvrv-zscore');
   const p2=loadBgMetric('puell','puell-multiple');
   const p3=loadBgMetric('nupl','nupl');
-  const pRealized=(()=>{
-    const fresh=cachedBgMetric('realizedPrice','realized-price');
-    const entry=cachedBgEndpoint('realized-price');
-    if(fresh&&bgCacheIsFresh(entry)){window._realizedPrice=fresh.value;return Promise.resolve();}
-    return bgCall('realized-price').then(d=>{
-      const rp=getMetricVal('realizedPrice',d);
-      if(rp)window._realizedPrice=rp;
-    }).catch(e=>bgErrors.push(`realized-price failed: ${e.message}`));
-  })();
   const p4=refreshFreeBtcIndicators(vals,{cacheSource:'live-free-btc-metrics'});
-  await Promise.all([p1,p2,p3,pRealized,p4]);
+  await Promise.all([p1,p2,p3,p4]);
   if(Number.isFinite(window._btcPrice)){
     const realized=chooseRealizedPremium(vals,window._btcPrice);
     if(Number.isFinite(realized.rvp)){
