@@ -68,6 +68,16 @@ body{background:#07080f;color:#e0e0f0;font-family:'DM Mono','Courier New',monosp
 .news-title{font-size:12px;color:#9a9dcc;margin-bottom:4px;}
 .news-body{font-size:11px;color:#5a5d8a;line-height:1.65;}
 .news-tag{font-size:9px;padding:2px 7px;border-radius:10px;border:1px solid;display:inline-block;margin-bottom:5px;}
+.brief-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-bottom:10px;}
+.brief-kpi{background:#07080f;border:1px solid #1a1c30;border-radius:8px;padding:10px;}
+.brief-kpi-label{font-size:9px;color:#3a3d6a;letter-spacing:0.14em;margin-bottom:4px;}
+.brief-kpi-value{font-size:13px;color:#c8caee;line-height:1.35;}
+.brief-kpi-sub{font-size:10px;color:#5a5d8a;line-height:1.55;margin-top:4px;}
+.brief-action{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #1a1c30;}
+.brief-action:last-child{border-bottom:none;}
+.brief-action-rank{font-family:'Bebas Neue',sans-serif;font-size:26px;line-height:0.9;color:#378ADD;min-width:24px;}
+.brief-empty{font-size:11px;color:#5a5d8a;line-height:1.6;}
+.brief-policy{font-size:10px;color:#3a3d6a;line-height:1.6;margin-top:8px;}
 .ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0;}
 .ai-box{background:#07080f;border-radius:6px;padding:10px;border:1px solid #1a1c30;}
 .ai-box-lbl{font-size:9px;color:#378ADD;margin-bottom:3px;}
@@ -1137,6 +1147,43 @@ async function startFetch(){
 }
 function resetKey(){startFetch();}
 
+function briefBtcStatus(cs,fg){
+  if(!cs)return {label:'Load BTC Score',color:'#3a3d6a',copy:'Open BTC Score once so the brief can use the latest cycle read.'};
+  if(cs.score<=20)return {label:'Reserve zone active',color:'#1D9E75',copy:'BTC Score is in a high-opportunity zone. Confirm price drawdown and use the reserve ladder.'};
+  if(cs.score<=35)return {label:'Accumulation zone',color:'#639922',copy:'BTC is below long-term fair value. Keep DCA on and watch for deeper reserve triggers.'};
+  if(cs.score<=55)return {label:'Neutral zone',color:'#BA7517',copy:'No need to force reserve deployment. Prioritize best next dollar and watchlist entries.'};
+  return {label:'Risk elevated',color:'#E24B4A',copy:'Cycle risk is elevated. DCA discipline matters more than reserve buying.'};
+}
+function briefDecisionItems({cs,fg,btcChg,top}){
+  const items=[];
+  const btc=briefBtcStatus(cs,fg);
+  items.push({title:btc.label,body:btc.copy,color:btc.color});
+  if(top){
+    const act=actionFor(top.score,top.thesis,top.confidence);
+    items.push({title:`Top opportunity: ${top.ticker} · ${act.label}`,body:`Score ${top.score}/100. ${top.reason}`,color:act.color});
+  }
+  const watch=watchlistRows().map(item=>({item,score:watchlistScore(item)})).sort((a,b)=>b.score.score-a.score.score).slice(0,2);
+  watch.forEach(w=>items.push({title:`Watchlist: ${w.item.ticker} · ${w.score.action.label}`,body:`Pull-trigger score ${w.score.score}/100. ${w.score.action.copy}`,color:w.score.action.color}));
+  if(Number.isFinite(fg)&&fg<20)items.push({title:'Sentiment overlay: Extreme Fear',body:'Useful as confirmation, but on-chain metrics still drive the BTC score.',color:'#1D9E75'});
+  if(Number.isFinite(btcChg)&&btcChg<=-4)items.push({title:'BTC volatility alert',body:`BTC is ${btcChg.toFixed(1)}% over 24h. Check whether this changes reserve ladder timing.`,color:'#BA7517'});
+  return items.slice(0,5);
+}
+function renderBriefActions(items){
+  if(!items.length)return '<div class="brief-empty">No strong actions yet. Refresh BTC Score, portfolio, and watchlist data for a fuller read.</div>';
+  return items.map((item,idx)=>`<div class="brief-action">
+    <div class="brief-action-rank" style="color:${item.color};">${idx+1}</div>
+    <div>
+      <div class="news-title" style="color:${item.color};">${esc(item.title)}</div>
+      <div class="news-body">${esc(item.body)}</div>
+    </div>
+  </div>`).join('');
+}
+function renderBriefWatchlistMini(){
+  const rows=watchlistRows().map(item=>({item,score:watchlistScore(item)})).sort((a,b)=>b.score.score-a.score.score).slice(0,4);
+  if(!rows.length)return '<div class="brief-empty">No watchlist items yet. Add names from Opportunities, Emerging Leaders, or Research.</div>';
+  return rows.map(({item,score})=>`<div class="metric-row"><span><strong>${esc(item.ticker)}</strong> ${sectorHtml(item.category||'Watchlist')}</span><strong style="color:${score.action.color};">${score.score} · ${esc(score.action.label)}</strong></div>`).join('');
+}
+
 async function loadBrief(){
   const btn=document.getElementById('brief-refresh-btn');
   btn.disabled=true;btn.textContent='Loading...';
@@ -1157,48 +1204,65 @@ async function loadBrief(){
     if(!r.ok)r=await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1500&interval=daily');
     const d=await r.json();const prices=d.prices;
     ma200=prices.slice(-1400).map(p=>p[1]).reduce((a,b)=>a+b,0)/Math.min(1400,prices.length);
-    rpProxy=prices.slice(-365).map(p=>p[1]).reduce((a,b)=>a+b,0)/365;
   }catch(e){}
   try{await loadScreener();}catch(e){}
   const cs=window._cycleScore||null;
+  const rvp=cs?.inputs?.rvp;
+  if(Number.isFinite(btcP)&&Number.isFinite(rvp))rpProxy=btcP/(1+rvp/100);
   const scoreNum=cs?cs.score:'—';
   const scoreCol=cs?cs.color:'#3a3d6a';
   const scoreLbl=cs?cs.label.split('—')[0].trim():'Visit BTC Score tab first';
   const fgLbl=fg===null?'—':fg<20?'Extreme Fear':fg<40?'Fear':fg<60?'Neutral':fg<80?'Greed':'Extreme Greed';
   const fgCol=fg===null?'#3a3d6a':fg<20?'#1D9E75':fg<40?'#639922':fg<60?'#BA7517':fg<80?'#E24B4A':'#A32D2D';
   const chgStr=v=>v==null?'':` (${moveHtml(v)} 24h)`;
-  const maAbove=(btcP&&ma200)?((btcP-ma200)/ma200*100).toFixed(1)+'% above 200W MA':'—';
+  const maPct=(btcP&&ma200)?((btcP-ma200)/ma200*100):null;
+  const maAbove=Number.isFinite(maPct)?`${maPct>=0?'+':''}${maPct.toFixed(1)}% vs 200W MA`:'—';
+  const topOpp=(()=>{try{return rankedOpportunities()[0];}catch(e){return null;}})();
+  const decisionItems=briefDecisionItems({cs,fg,btcChg,top:topOpp});
   document.getElementById('brief-content').innerHTML=`
+    <div class="brief-grid">
     <div class="card">
-      <p class="section-label" style="margin-bottom:10px;">₿ BTC CYCLE SNAPSHOT</p>
+      <p class="section-label" style="margin-bottom:10px;">BTC CYCLE SNAPSHOT</p>
       <div class="score-mini">
         <div class="score-mini-num" style="color:${scoreCol};">${scoreNum}</div>
         <div>
           <div style="font-size:12px;color:${scoreCol};letter-spacing:0.12em;margin-bottom:4px;">${scoreLbl}</div>
           <div style="font-size:11px;color:#5a5d8a;">BTC ${btcP?'$'+btcP.toLocaleString(undefined,{maximumFractionDigits:0}):'—'}${chgStr(btcChg)} · ETH ${ethP?'$'+ethP.toLocaleString(undefined,{maximumFractionDigits:2}):'—'}${chgStr(ethChg)}</div>
-          <div style="font-size:11px;color:#5a5d8a;margin-top:3px;">${maAbove} · Realized proxy ${rpProxy?'$'+Math.round(rpProxy).toLocaleString():'—'}</div>
-          <div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Fear & Greed <span style="color:${fgCol};">${fg!==null?fg+' / 100 ('+fgLbl+')':'—'}</span></div>
+          <div style="font-size:11px;color:#5a5d8a;margin-top:3px;">${maAbove} · Realized ${rpProxy?'$'+Math.round(rpProxy).toLocaleString():'—'}</div>
+          <div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Sentiment Overlay <span style="color:${fgCol};">${fg!==null?fg+' / 100 ('+fgLbl+')':'—'}</span></div>
         </div>
       </div>
-      <p style="font-size:10px;color:#2a2d50;font-style:italic;">For full on-chain breakdown open the BTC Score tab. BGeometrics runs through the Vercel proxy.</p>
+      <p style="font-size:10px;color:#2a2d50;font-style:italic;">Full on-chain breakdown lives in BTC Score. Realized is NUPL-derived when available.</p>
     </div>
     <div class="card">
-      <p class="section-label" style="margin-bottom:14px;">🎯 TOP OPPORTUNITY / RESERVE PLAN</p>
+      <p class="section-label" style="margin-bottom:14px;">TOP OPPORTUNITY / RESERVE PLAN</p>
       <div id="brief-opportunity-mini"></div>
       <p style="font-size:10px;color:#2a2d50;font-style:italic;margin-top:10px;">Open the Opportunities tab for expandable rationale and full ranking.</p>
     </div>
+    </div>
+    <div class="brief-grid">
+      <div class="card">
+        <p class="section-label" style="margin-bottom:10px;">DECISION RADAR</p>
+        ${renderBriefActions(decisionItems)}
+      </div>
+      <div class="card">
+        <p class="section-label" style="margin-bottom:10px;">WATCHLIST PULL TRIGGERS</p>
+        ${renderBriefWatchlistMini()}
+        <p class="brief-policy">Scores combine fundamentals, thesis, valuation, technical setup, macro, history, opportunity, and confidence.</p>
+      </div>
+    </div>
     
     <div class="card">
-      <p class="section-label" style="margin-bottom:14px;">📰 LIVE MARKET HEADLINES</p>
+      <p class="section-label" style="margin-bottom:14px;">LIVE MARKET HEADLINES</p>
       <div id="live-news-list">
         <div class="news-item">
           <div class="news-title">Loading fresh headlines…</div>
-          <div class="news-body">The brief now attempts to load fresh market, macro, and news items from /api/news on every app open. Hardcoded stale headlines have been removed.</div>
+          <div class="news-body">Fetching market, macro, crypto, company, theme, and filing/earnings headlines. Normal news uses the last 24 hours; major context can remain for 48 hours.</div>
         </div>
       </div>
     </div>
     
-    <p class="footer-note">Not financial advice · Prices: CoinGecko · Sentiment: Alternative.me · News refreshes on demand</p>
+    <p class="footer-note">Not financial advice · Prices: CoinGecko · Sentiment: Alternative.me · News policy: 24h normal / 48h major</p>
   `;
   try{const top=rankedOpportunities()[0];const act=actionFor(top.score,top.thesis,top.confidence);const d=deploymentForScore(currentCycleScore());document.getElementById('brief-opportunity-mini').innerHTML=`<div class="score-mini"><div class="score-mini-num" style="color:${act.color};">${top.score}</div><div><div style="font-size:12px;color:${act.color};letter-spacing:0.12em;margin-bottom:4px;">${top.ticker} · ${act.label}</div><div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${moveHtml(top.drop)} · ${top.reason}</div><div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Reserve suggestion: ${money(d.amount)} if BTC Score and price drawdown triggers are both met.</div></div></div>`;}catch(e){}
   document.getElementById('brief-loading').style.display='none';
@@ -1221,22 +1285,24 @@ async function loadLiveNews(){
     if(!buckets.length&&!items.length)throw new Error('no items');
     if(buckets.length){
       box.innerHTML=buckets.map(bucket=>`<div class="news-item">
-        <div class="news-tag" style="color:#378ADD;border-color:#234d7a;">${bucket.name}</div>
+        <div class="news-tag" style="color:#378ADD;border-color:#234d7a;">${esc(bucket.name)}</div>
         ${(bucket.items||[]).map(n=>`<div style="margin:8px 0 12px;">
-          <div class="news-title">${n.bigNews?'BIG · ':''}${n.title||'Untitled headline'}</div>
-          <div class="news-body">${n.source?`${n.source} · `:''}${n.published||''}${Number.isFinite(n.ageHours)?` · ${n.ageHours.toFixed(1)}h old`:''}${n.ticker?` · ${n.ticker}`:''}${n.theme?` · ${n.theme}`:''}<br>${n.why||''}</div>
+          <div class="news-title">${n.bigNews?'BIG · ':''}${n.link?`<a href="${esc(n.link)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">${esc(n.title||'Untitled headline')}</a>`:esc(n.title||'Untitled headline')}</div>
+          <div class="news-body">${n.source?`${esc(n.source)} · `:''}${n.sourceTier?`${esc(n.sourceTier)} · `:''}${esc(n.published||'')}${Number.isFinite(n.ageHours)?` · ${n.ageHours.toFixed(1)}h old`:''}${n.ticker?` · ${esc(n.ticker)}`:''}${n.theme?` · ${esc(n.theme)}`:''}<br>${esc(n.why||'')}</div>
         </div>`).join('')}
       </div>`).join('');
     }else{
       box.innerHTML=items.map(n=>`<div class="news-item">
-        <div class="news-title">${n.title||'Untitled headline'}</div>
-        <div class="news-body">${n.source?`${n.source} · `:''}${n.publishedAt||n.published||''}${n.summary?` · ${n.summary}`:''}</div>
+        <div class="news-title">${n.link?`<a href="${esc(n.link)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">${esc(n.title||'Untitled headline')}</a>`:esc(n.title||'Untitled headline')}</div>
+        <div class="news-body">${n.source?`${esc(n.source)} · `:''}${esc(n.publishedAt||n.published||'')}${n.summary?` · ${esc(n.summary)}`:''}</div>
       </div>`).join('');
     }
+    box.insertAdjacentHTML('beforeend',`<p class="brief-policy">${esc(d.policy||'24h normal news; 48h major context')} · Updated ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()}</p>`);
   }catch(e){
     box.innerHTML=`<div class="news-item">
-      <div class="news-title">Live news route unavailable</div>
-      <div class="news-body">Add /api/news.js later for fresh headlines. This build intentionally avoids stale hardcoded market headlines.</div>
+      <div class="news-title">Live news route unavailable in this view</div>
+      <div class="news-body">This local static server may not serve /api/news. The deployed Vercel app can use the live route. No stale hardcoded headlines are shown.</div>
+      <p class="brief-policy">Policy remains: last 24 hours for normal news, last 48 hours only for major market-moving context.</p>
     </div>`;
   }
 }

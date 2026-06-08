@@ -18,6 +18,15 @@ function isBigNews(item) {
   return /(fed|federal reserve|rate cut|rate hike|cpi|inflation|recession|war|attack|crisis|bank|default|sec|etf|bitcoin reserve|earnings shock|guidance cut|tariff|sanction|nuclear|defense|ai capex|data center|blackout|grid|credit stress)/.test(text);
 }
 
+function sourceTier(source = '') {
+  const s = source.toLowerCase();
+  if (/(reuters|associated press|ap news|cnbc|wall street journal|wsj|bloomberg|financial times|ft|barron)/.test(s)) return 'Primary market source';
+  if (/(sec|investor relations|earnings call|transcript)/.test(s)) return 'Company / filing source';
+  if (/(coindesk|the block|decrypt|cointelegraph)/.test(s)) return 'Crypto source';
+  if (/(seeking alpha|marketwatch|yahoo finance)/.test(s)) return 'Market commentary';
+  return 'News source';
+}
+
 function inferTicker(title = '') {
   const text = title.toUpperCase();
   const tickers = ['BTC', 'ETH', 'NVDA', 'AVGO', 'MU', 'AMD', 'ASML', 'TSM', 'META', 'GOOGL', 'AMZN', 'MSFT', 'V', 'MA', 'ISRG', 'CRWD', 'DDOG', 'AXON', 'PWR', 'FIX', 'BWXT', 'VST', 'ETN', 'HWM', 'XYL'];
@@ -62,6 +71,7 @@ function extractItems(xml, bucket) {
       link,
       published: pubDate,
       source,
+      sourceTier: sourceTier(source),
       category: bucket.category,
       sourceGroup: bucket.name,
       ticker: inferTicker(title),
@@ -87,11 +97,12 @@ function dedupe(items) {
 
 export default async function handler(req, res) {
   const buckets = [
-    { name: 'Market / Macro', category: 'MACRO', limit: 4, q: 'US stock market Fed jobs report Treasury yields inflation Reuters OR AP OR CNBC' },
-    { name: 'Crypto', category: 'CRYPTO', limit: 4, q: 'bitcoin ethereum crypto ETF regulation market CoinDesk The Block Decrypt' },
-    { name: 'Opportunities / Companies', category: 'OPPORTUNITIES', limit: 5, q: 'NVDA AVGO MU ASML TSM META GOOGL AMZN MSFT stock falls earnings guidance analyst' },
-    { name: 'Themes', category: 'THEMES', limit: 4, q: 'AI data center power grid nuclear defense drones water infrastructure market news' },
-    { name: 'Filings / Earnings', category: 'EARNINGS', limit: 3, q: 'earnings guidance SEC filing 10-Q 8-K stock market today' }
+    { name: 'Market / Macro', category: 'MACRO', limit: 5, q: 'US stock market Fed jobs report Treasury yields inflation recession Reuters OR AP OR CNBC OR Bloomberg OR "Wall Street Journal" OR "Financial Times"' },
+    { name: 'Crypto', category: 'CRYPTO', limit: 4, q: 'bitcoin ethereum crypto ETF regulation market CoinDesk OR "The Block" OR Decrypt OR Reuters' },
+    { name: 'Opportunity Selloffs', category: 'OPPORTUNITIES', limit: 5, q: 'stock falls drops selloff earnings guidance downgrade valuation thesis intact NVDA AVGO MU ASML TSM META GOOGL AMZN MSFT Reuters CNBC Barrons Seeking Alpha' },
+    { name: 'Watchlist Companies', category: 'WATCHLIST', limit: 5, q: 'META GOOGL AMZN MSFT ASML TSM V MA ISRG CPRT AXON CRWD DDOG PWR FIX earnings guidance stock news' },
+    { name: 'Themes', category: 'THEMES', limit: 5, q: 'AI data center power grid nuclear defense drones water infrastructure reshoring market news Reuters CNBC Bloomberg' },
+    { name: 'Filings / Earnings', category: 'EARNINGS', limit: 4, q: 'earnings guidance SEC filing 10-Q 8-K earnings transcript stock market today' }
   ];
   const all = [];
   try {
