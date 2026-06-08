@@ -40,13 +40,27 @@ function stripHtml(input = '') {
 
 function extractNewsItems(xml, symbol) {
   const blocks = String(xml).match(/<item>[\s\S]*?<\/item>/g) || [];
-  return blocks.slice(0, 3).map(block => ({
-    symbol,
-    title: stripHtml((block.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) || block.match(/<title>([\s\S]*?)<\/title>/) || [,''])[1]),
-    link: stripHtml((block.match(/<link>([\s\S]*?)<\/link>/) || [,''])[1]),
-    published: stripHtml((block.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [,''])[1]),
-    source: stripHtml((block.match(/<source[^>]*>([\s\S]*?)<\/source>/) || [,'Google News'])[1])
-  })).filter(item => item.title);
+  return blocks.slice(0, 3).map(block => {
+    const published = stripHtml((block.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [,''])[1]);
+    const ageHours = hoursOld(published);
+    const item = {
+      symbol,
+      title: stripHtml((block.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) || block.match(/<title>([\s\S]*?)<\/title>/) || [,''])[1]),
+      link: stripHtml((block.match(/<link>([\s\S]*?)<\/link>/) || [,''])[1]),
+      published,
+      ageHours,
+      source: stripHtml((block.match(/<source[^>]*>([\s\S]*?)<\/source>/) || [,'Google News'])[1])
+    };
+    item.severity = severityFromHeadline(item.title);
+    item.thesisRisk = thesisRiskFromHeadline(item.title);
+    return item;
+  }).filter(item => item.title && item.ageHours <= 72);
+}
+
+function hoursOld(pubDate) {
+  const t = Date.parse(pubDate);
+  if (!Number.isFinite(t)) return Infinity;
+  return (Date.now() - t) / 36e5;
 }
 
 function severityFromHeadline(title = '') {
@@ -57,15 +71,20 @@ function severityFromHeadline(title = '') {
   return 34;
 }
 
+function thesisRiskFromHeadline(title = '') {
+  const text = title.toLowerCase();
+  if (/(fraud|bankrupt|bankruptcy|criminal|restatement|default|insolvency)/.test(text)) return 'thesis-breaking';
+  if (/(cuts guidance|guidance cut|misses|lawsuit|probe|investigation|halts|recall|short seller|outage)/.test(text)) return 'verify';
+  if (/(downgrade|valuation|selloff|falls|drops|slumps|pressure|concern|tariff|regulation|rates|macro)/.test(text)) return 'likely-temporary';
+  return 'context';
+}
+
 async function fetchSymbolNews(symbol, name) {
   const q = `${symbol} ${name || COMPANY_HINTS[symbol] || ''} stock news earnings`;
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`;
   const upstream = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 TrevorMarketApp/1.0' } });
   if (!upstream.ok) return [];
-  return extractNewsItems(await upstream.text(), symbol).map(item => ({
-    ...item,
-    severity: severityFromHeadline(item.title)
-  }));
+  return extractNewsItems(await upstream.text(), symbol);
 }
 
 async function fetchChartQuote(symbol) {

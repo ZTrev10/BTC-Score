@@ -78,6 +78,8 @@ body{background:#07080f;color:#e0e0f0;font-family:'DM Mono','Courier New',monosp
 .brief-action-rank{font-family:'Bebas Neue',sans-serif;font-size:26px;line-height:0.9;color:#378ADD;min-width:24px;}
 .brief-empty{font-size:11px;color:#5a5d8a;line-height:1.6;}
 .brief-policy{font-size:10px;color:#3a3d6a;line-height:1.6;margin-top:8px;}
+.op-chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.op-chip{font-size:9px;border:1px solid #1a1c30;border-radius:999px;padding:3px 7px;color:#6a6d9a;background:#07080f;}
 .ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0;}
 .ai-box{background:#07080f;border-radius:6px;padding:10px;border:1px solid #1a1c30;}
 .ai-box-lbl{font-size:9px;color:#378ADD;margin-bottom:3px;}
@@ -404,7 +406,7 @@ td strong{color:#c8caee;font-weight:500;}
   <div class="card">
     <p class="section-label">METHODOLOGY / TRUTH STATUS</p>
     <div class="detail-grid">
-      <div class="detail-box"><div class="detail-label">OPPORTUNITIES</div><div class="detail-text">Stock-only. Intended rule: solid company + 5%+ drop + identifiable negative news + thesis not broken + valuation improved. Current cards are transparent examples until live screener APIs are connected.</div></div>
+      <div class="detail-box"><div class="detail-label">OPPORTUNITIES</div><div class="detail-text">Stock-only. Rule: solid company + meaningful drop + identifiable negative news + thesis still intact + valuation improved. V2 uses live prices/news when the screener API is available, then falls back to curated assumptions when local static preview cannot serve APIs.</div></div>
       <div class="detail-box"><div class="detail-label">EMERGING LEADERS</div><div class="detail-text">Not just mega-cap AI. Looks for themes gaining strength: grid, water, defense, healthcare, public safety software, infrastructure, and other macro/political/world-event beneficiaries.</div></div>
       <div class="detail-box"><div class="detail-label">NEWS SOURCES</div><div class="detail-text">Daily Brief attempts /api/news. If unavailable, it clearly shows live-news unavailable instead of reverting to stale hardcoded headlines.</div></div>
     </div>
@@ -1159,7 +1161,7 @@ function briefDecisionItems({cs,fg,btcChg,top}){
   const btc=briefBtcStatus(cs,fg);
   items.push({title:btc.label,body:btc.copy,color:btc.color});
   if(top){
-    const act=actionFor(top.score,top.thesis,top.confidence);
+    const act=opportunityActionFor(top);
     items.push({title:`Top opportunity: ${top.ticker} · ${act.label}`,body:`Score ${top.score}/100. ${top.reason}`,color:act.color});
   }
   const watch=watchlistRows().map(item=>({item,score:watchlistScore(item)})).sort((a,b)=>b.score.score-a.score.score).slice(0,2);
@@ -1264,7 +1266,7 @@ async function loadBrief(){
     
     <p class="footer-note">Not financial advice · Prices: CoinGecko · Sentiment: Alternative.me · News policy: 24h normal / 48h major</p>
   `;
-  try{const top=rankedOpportunities()[0];const act=actionFor(top.score,top.thesis,top.confidence);const d=deploymentForScore(currentCycleScore());document.getElementById('brief-opportunity-mini').innerHTML=`<div class="score-mini"><div class="score-mini-num" style="color:${act.color};">${top.score}</div><div><div style="font-size:12px;color:${act.color};letter-spacing:0.12em;margin-bottom:4px;">${top.ticker} · ${act.label}</div><div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${moveHtml(top.drop)} · ${top.reason}</div><div style="font-size:11px;color:#5a5d8a;margin-top:3px;">Reserve suggestion: ${money(d.amount)} if BTC Score and price drawdown triggers are both met.</div></div></div>`;}catch(e){}
+  try{const top=rankedOpportunities()[0];const act=opportunityActionFor(top);const d=deploymentForScore(currentCycleScore());document.getElementById('brief-opportunity-mini').innerHTML=`<div class="score-mini"><div class="score-mini-num" style="color:${act.color};">${top.score}</div><div><div style="font-size:12px;color:${act.color};letter-spacing:0.12em;margin-bottom:4px;">${top.ticker} · ${act.label}</div><div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${moveHtml(top.drop)} · ${top.reason}</div><div style="font-size:11px;color:#5a5d8a;margin-top:3px;">${esc(act.copy)} Reserve suggestion: ${money(d.amount)} if BTC Score and price drawdown triggers are both met.</div></div></div>`;}catch(e){}
   document.getElementById('brief-loading').style.display='none';
   document.getElementById('brief-content').style.display='block';
   try{loadLiveNews();}catch(e){}
@@ -1401,12 +1403,76 @@ function deploymentForScore(score){
   if(score>5)return {zone:'MAJOR ALLOCATION',amount:90000,percent:30,copy:'Score below 10. Major panic-buy zone if price-confirmed.'};
   return {zone:'MAXIMUM OPPORTUNITY',amount:120000,percent:40,copy:'Score below 5. Deploy remaining reserve tranche, assuming no structural BTC thesis break.'};
 }
+function profileForOpportunity(item){
+  return RESEARCH_PROFILES[item.ticker]||{};
+}
+function headlineRisk(title=''){
+  const text=String(title).toLowerCase();
+  if(/(fraud|criminal|bankrupt|bankruptcy|insolvency|default|restatement|accounting probe|sec probe|doj probe)/.test(text))return {level:'Thesis-breaking risk',score:30,color:'#A32D2D',temporary:false};
+  if(/(cuts guidance|guidance cut|misses|lawsuit|investigation|probe|halts|recall|short seller|data breach|outage)/.test(text))return {level:'Needs verification',score:58,color:'#BA7517',temporary:false};
+  if(/(downgrade|valuation|multiple|selloff|falls|drops|slumps|pressure|concern|tariff|regulation|rates|yield|macro|weak market)/.test(text))return {level:'Likely temporary',score:78,color:'#639922',temporary:true};
+  return {level:'News context light',score:66,color:'#6a6d9a',temporary:true};
+}
+function valuationBaseFor(item){
+  const p=profileForOpportunity(item);
+  const defaults=RESEARCH_SCORE_DEFAULTS[item.ticker]||{};
+  return clamp(defaults.valuation??(typeof p.valuation==='number'?p.valuation:58));
+}
+function macroScoreForOpportunity(item){
+  const p=profileForOpportunity(item);
+  const defaults=RESEARCH_SCORE_DEFAULTS[item.ticker]||{};
+  const emerging=EMERGING_LEADERS.find(x=>x.ticker===item.ticker);
+  return clamp(defaults.macro??(typeof p.macro==='number'?p.macro:emerging?.narrative??60));
+}
+function selloffScore(drop){
+  const d=Math.abs(Number(drop)||0);
+  if(d>=12)return 95;
+  if(d>=8)return 88;
+  if(d>=5)return 78;
+  if(d>=3)return 58;
+  if(d>0)return 42;
+  return 25;
+}
+function valuationImprovementScore(item){
+  const base=valuationBaseFor(item);
+  const d=Math.max(0,Math.abs(Number(item.drop)||0));
+  return clamp(base + Math.min(24,d*4));
+}
+function opportunitySetup(item){
+  const risk=headlineRisk(item.reason||item.liveNews?.title||'');
+  const quality=clamp(item.quality);
+  const thesisBase=clamp(item.thesis);
+  const thesisIntact=clamp((thesisBase*0.72)+(risk.score*0.28));
+  const valuation=valuationImprovementScore(item);
+  const selloff=selloffScore(item.drop);
+  const newsQuality=item.liveNews?clamp(74-(item.newsSeverity||40)*0.18):48;
+  const macro=macroScoreForOpportunity(item);
+  const confidence=clamp(item.confidence + (item.liveNews?8:-8) + (Math.abs(Number(item.drop)||0)>=5?5:0) - (risk.temporary?0:8));
+  const raw=Math.round(
+    quality*0.20 +
+    thesisIntact*0.20 +
+    valuation*0.18 +
+    selloff*0.17 +
+    newsQuality*0.10 +
+    macro*0.08 +
+    confidence*0.07
+  );
+  const thesisBreak=thesisIntact<55||risk.level==='Thesis-breaking risk';
+  const score=thesisBreak?Math.min(raw,49):raw;
+  const valuationImproved=valuation>=65;
+  const downEnough=Number(item.drop)<=-5;
+  return {score,quality,thesisIntact,valuation,selloff,newsQuality,macro,confidence,risk,valuationImproved,downEnough,raw};
+}
+function opportunityActionFor(item){
+  const s=item.setup||opportunitySetup(item);
+  if(s.risk.level==='Thesis-breaking risk'||s.thesisIntact<55)return {label:'AVOID',color:'#A32D2D',copy:'Bad news may impair the thesis. Do not treat this as a simple sale.'};
+  if(s.score>=78&&s.confidence>=62&&s.downEnough&&s.valuationImproved)return {label:'BUY',color:'#1D9E75',copy:'Quality business, meaningful selloff, valuation improved, and thesis appears intact.'};
+  if(s.score>=64)return {label:'WATCH',color:'#BA7517',copy:'Interesting setup, but wait for better price, stronger news confirmation, or cleaner thesis evidence.'};
+  if(s.score>=50)return {label:'AVOID',color:'#E24B4A',copy:'Not enough edge yet. Either the selloff is too small, valuation has not improved enough, or confidence is weak.'};
+  return {label:'TOO RISKY',color:'#A32D2D',copy:'Setup quality is too weak for new capital.'};
+}
 function opportunityScore(item){
-  const cycle=currentCycleScore();
-  const dropScore=Math.min(100,Math.max(0,Math.abs(item.drop)*8));
-  const cycleBoost=55;
-  const newsOpportunity=Math.max(0,100-item.newsSeverity);
-  return Math.round(dropScore*0.20 + item.quality*0.25 + item.thesis*0.25 + item.confidence*0.15 + newsOpportunity*0.15);
+  return opportunitySetup(item).score;
 }
 function renderReserveLadder(){
   const score=currentCycleScore();
@@ -1441,22 +1507,31 @@ function rankedOpportunities(){
       newsSeverity:liveNews?.severity ?? i.newsSeverity,
       reason:liveNews?.title || i.reason
     };
-    return {...enriched,score:opportunityScore(enriched)};
+    const setup=opportunitySetup(enriched);
+    return {...enriched,setup,score:setup.score};
   }).sort((a,b)=>b.score-a.score);
 }
 function renderOpportunities(){
   renderReserveLadder();
   const sorted=rankedOpportunities();
   document.getElementById('opportunity-list').innerHTML=sorted.map(item=>{
-    const a=actionFor(item.score,item.thesis,item.confidence);
+    const a=opportunityActionFor(item);
+    const setup=item.setup||opportunitySetup(item);
     const priceTag=item.livePrice?` · ${priceHtml(item.livePrice)}`:'';
     const liveTag=item.isLive?'<span style="color:#1D9E75;font-size:9px;margin-left:6px;">● LIVE</span>':'<span style="color:#3a3d6a;font-size:9px;margin-left:6px;">est.</span>';
-    const newsMeta=item.liveNews?`${item.liveNews.source||'News'}${item.liveNews.published?' · '+item.liveNews.published:''}`:'Placeholder context — waiting for a live down-5% news trigger.';
+    const newsMeta=item.liveNews?`${item.liveNews.source||'News'}${Number.isFinite(item.liveNews.ageHours)?' · '+item.liveNews.ageHours.toFixed(1)+'h old':''}${item.liveNews.thesisRisk?' · '+item.liveNews.thesisRisk:''}`:'Placeholder context — waiting for a live down-5% news trigger.';
+    const chips=[
+      `${setup.downEnough?'5%+ selloff':'No 5% selloff'}`,
+      `${setup.valuationImproved?'Valuation improved':'Entry not improved enough'}`,
+      setup.risk.level,
+      item.liveNews?'Live news linked':'Needs live news'
+    ];
     return `<div class="op-card">
       <div class="op-head" onclick="toggleCard(this)">
         <div>
           <div class="op-ticker">${item.ticker}${liveTag} <span style="font-size:10px;color:#3a3d6a;">${item.name}</span></div>
           <div class="op-sub">${moveHtml(item.drop)}${priceTag} · ${sectorHtml(item.category)}</div>
+          <div class="op-chip-row">${chips.map(c=>`<span class="op-chip">${esc(c)}</span>`).join('')}</div>
         </div>
         <div>
           <div class="op-score" style="color:${a.color};">${item.score}</div>
@@ -1466,9 +1541,10 @@ function renderOpportunities(){
       <div class="op-details">
         <div class="detail-grid">
           <div class="detail-box"><div class="detail-label">WHY IS IT DOWN?</div><div class="detail-text">${item.reason}<br><span style="color:#6a6d9a;">${newsMeta}</span></div></div>
-          <div class="detail-box"><div class="detail-label">THESIS INTEGRITY</div><div class="detail-text">${item.thesis}/100 · ${item.thesis>=80?'Thesis appears intact.':item.thesis>=60?'Some risk; monitor before sizing up.':'Potential impairment; avoid or keep small.'}</div></div>
-          <div class="detail-box"><div class="detail-label">CONFIDENCE</div><div class="detail-text">${item.confidence}/100 · Based on signal strength, price move, and news severity assumptions.</div></div>
-          <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text">Primary ranking is Opportunity Score. Secondary action is ${a.label}. For BTC/ETH, reserve capital requires BTC Score below 20 plus a 15–20% drawdown from recent high.</div></div>
+          <div class="detail-box"><div class="detail-label">THESIS INTEGRITY</div><div class="detail-text">${Math.round(setup.thesisIntact)}/100 · ${setup.risk.level}. ${setup.thesisIntact>=75?'Thesis appears intact.':setup.thesisIntact>=55?'Some risk; verify before sizing up.':'Potential impairment; avoid or keep small.'}</div></div>
+          <div class="detail-box"><div class="detail-label">VALUATION IMPROVED?</div><div class="detail-text">${Math.round(setup.valuation)}/100 · ${setup.valuationImproved?'The selloff likely improved the entry price.':'The entry price has not improved enough yet.'} Base valuation score ${valuationBaseFor(item)}/100.</div></div>
+          <div class="detail-box"><div class="detail-label">SETUP QUALITY</div><div class="detail-text">Quality ${Math.round(setup.quality)} · Selloff ${Math.round(setup.selloff)} · News ${Math.round(setup.newsQuality)} · Macro ${Math.round(setup.macro)} · Confidence ${Math.round(setup.confidence)}.</div></div>
+          <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text"><span style="color:${a.color};">${a.label}</span> · ${a.copy}</div></div>
         </div>
         <div class="research-actions">
           <button class="btn" onclick="event.stopPropagation();addOpportunityToWatchlist('${item.ticker}')">Add to Watchlist</button>
@@ -2089,7 +2165,7 @@ function collectSnapshot(){
   const notes=document.getElementById('memory-notes')?.value||'';
   const cycle=window._cycleScore||null;
   const btcInputs=cycle?.inputs||getCycleCache()?.vals||{};
-  const opportunities=rankedOpportunities().slice(0,5).map(o=>({ticker:o.ticker,score:o.score,drop:o.drop,reason:o.reason,action:actionFor(o.score,o.thesis,o.confidence).label}));
+  const opportunities=rankedOpportunities().slice(0,5).map(o=>({ticker:o.ticker,score:o.score,drop:o.drop,reason:o.reason,action:opportunityActionFor(o).label,setup:o.setup}));
   const research=window._currentResearch?{ticker:window._currentResearch.ticker,score:window._currentResearch.score,decision:window._currentResearch.decision?.label,price:window._currentResearch.price||null}:null;
   const headlines=[...document.querySelectorAll('#live-news-list .news-title')].slice(0,6).map(el=>el.textContent.trim()).filter(Boolean);
   return {

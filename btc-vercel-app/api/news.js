@@ -18,6 +18,11 @@ function isBigNews(item) {
   return /(fed|federal reserve|rate cut|rate hike|cpi|inflation|recession|war|attack|crisis|bank|default|sec|etf|bitcoin reserve|earnings shock|guidance cut|tariff|sanction|nuclear|defense|ai capex|data center|blackout|grid|credit stress)/.test(text);
 }
 
+function affectsTodayDecision(item) {
+  const text = `${item.title || ''} ${item.theme || ''} ${item.category || ''}`.toLowerCase();
+  return /(bitcoin|btc|ethereum|eth|etf|fed|federal reserve|rate|yield|cpi|inflation|jobs|treasury|recession|bank|credit|liquidity|war|attack|tariff|sanction|guidance|earnings|downgrade|selloff|falls|drops|stock|nvidia|nvda|meta|google|googl|amazon|amzn|microsoft|msft|asml|tsm|visa|mastercard|axon|crowdstrike|crwd|power|grid|nuclear|defense|drones|data center|ai capex|water|infrastructure)/.test(text);
+}
+
 function sourceTier(source = '') {
   const s = source.toLowerCase();
   if (/(reuters|associated press|ap news|cnbc|wall street journal|wsj|bloomberg|financial times|ft|barron)/.test(s)) return 'Primary market source';
@@ -79,6 +84,7 @@ function extractItems(xml, bucket) {
     };
     item.ageHours = hoursOld(pubDate);
     item.bigNews = isBigNews(item);
+    item.decisionRelevant = affectsTodayDecision(item);
     item.why = whyItMatters(item);
     items.push(item);
   }
@@ -115,7 +121,7 @@ export default async function handler(req, res) {
     }
 
     const fresh = dedupe(all)
-      .filter(item => item.ageHours <= 24 || (item.bigNews && item.ageHours <= 48))
+      .filter(item => item.ageHours <= 24 || (item.bigNews && item.decisionRelevant && item.ageHours <= 48))
       .sort((a, b) => {
         if (a.bigNews !== b.bigNews) return a.bigNews ? -1 : 1;
         return a.ageHours - b.ageHours;
@@ -131,7 +137,7 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     return res.status(200).json({
       updatedAt: new Date().toISOString(),
-      policy: '24h normal news; 48h major context',
+      policy: '24h normal news; 48h major context only if still decision-relevant',
       buckets: byBucket,
       items: byBucket.flatMap(bucket => bucket.items).slice(0, 16)
     });
