@@ -1877,6 +1877,54 @@ function researchDecision(score,context){
   if(score>=45)return {label:context==='sell'?'REDUCE CANDIDATE':'HOLD OFF',color:'#E24B4A',copy:'Not the best home for the next dollar right now.'};
   return {label:'AVOID / EXIT REVIEW',color:'#A32D2D',copy:'Weak score. Require a major thesis change before adding capital.'};
 }
+function researchFromApi(d){
+  const context=document.getElementById('research-context')?.value||'new';
+  const horizon=document.getElementById('research-horizon')?.value||'long';
+  const notes=document.getElementById('research-notes')?.value||'';
+  const liveDrop=d.quote?.changePercent??null;
+  const dropBoost=liveDrop<0?Math.min(10,Math.abs(liveDrop)*1.2):Math.max(-6,-Math.abs(liveDrop||0)*0.6);
+  const score=Math.round(clamp(
+    d.fundamental*0.25 +
+    d.thesis*0.22 +
+    d.valuationScore*0.18 +
+    d.macroScore*0.10 +
+    d.opportunity*0.17 +
+    (d.confidence||55)*0.08 +
+    dropBoost
+  ));
+  const decision=researchDecision(score,context);
+  const bestAlt=rankedOpportunities().find(x=>x.ticker!==d.symbol);
+  return {
+    ticker:d.symbol,
+    name:d.name||d.symbol,
+    type:d.type||'Public equity',
+    fundamental:d.fundamental,
+    thesis:d.thesis,
+    valuationScore:d.valuationScore,
+    macroScore:d.macroScore,
+    opportunity:d.opportunity,
+    confidence:d.confidence,
+    summary:d.summary,
+    bull:d.bull,
+    bear:d.bear,
+    valuationText:d.valuationText,
+    macroText:d.macroText,
+    risks:d.risks,
+    score,
+    decision,
+    price:d.quote?.price??null,
+    liveDrop,
+    notes,
+    context,
+    horizon,
+    bestAlt,
+    news:d.news||[],
+    filings:d.filings||[],
+    metrics:d.metrics||{},
+    sources:d.sources||[],
+    createdAt:new Date().toISOString()
+  };
+}
 function buildResearch(symbol){
   const profile=researchProfile(symbol);
   const defaults=RESEARCH_SCORE_DEFAULTS[profile.ticker]||{};
@@ -1897,13 +1945,21 @@ function buildResearch(symbol){
   const bestAlt=rankedOpportunities().find(x=>x.ticker!==profile.ticker);
   return {...profile,valuationScore,macroScore,valuationText,macroText,score,decision,price,liveDrop,notes,context,horizon,bestAlt,createdAt:new Date().toISOString()};
 }
+async function fetchLiveResearch(symbol){
+  const r=await fetch('/api/research?symbol='+encodeURIComponent(symbol)+'&ts='+Date.now());
+  if(!r.ok)throw new Error('research api '+r.status);
+  return researchFromApi(await r.json());
+}
 function renderResearchCard(r){
   const scores=[
     ['Fundamental',r.fundamental],['Thesis',r.thesis],['Valuation',r.valuationScore],['Macro',r.macroScore],['Opportunity',r.opportunity]
   ].map(([label,val])=>`<div class="research-score"><div class="detail-label">${label.toUpperCase()}</div><div class="research-score-num" style="color:${col(val)};">${Math.round(val)}</div></div>`).join('');
   const priceLine=r.price?priceHtml(r.price):'<span class="price-text">Price unavailable</span>';
   const moveLine=r.liveDrop!=null?`${moveHtml(r.liveDrop)} recent move`:'<span class="move-flat">No live move available</span>';
-  const alt=r.bestAlt?`${r.bestAlt.ticker} (${researchDecision(r.bestAlt.score,'new').label}, score ${r.bestAlt.score})`:'cash / wait';
+  const alt=r.bestAlt?`${r.bestAlt.ticker} (${opportunityActionFor(r.bestAlt).label}, score ${r.bestAlt.score})`:'cash / wait';
+  const newsHtml=(r.news||[]).slice(0,4).map(n=>`${n.link?`<a href="${esc(n.link)}" target="_blank" rel="noopener" style="color:#9a9dcc;text-decoration:none;">${esc(n.title)}</a>`:esc(n.title)}<br><span style="color:#3a3d6a;">${esc(n.source||'News')}${Number.isFinite(n.ageHours)?' · '+n.ageHours.toFixed(1)+'h old':''}${n.thesisRisk?' · '+esc(n.thesisRisk):''}</span>`).join('<br><br>')||'No fresh headline found.';
+  const filingsHtml=(r.filings||[]).slice(0,5).map(f=>`${esc(f.form)} · ${esc(f.filed||'')}`).join('<br>')||'SEC filings unavailable.';
+  const sourcesHtml=(r.sources||[]).map(esc).join(' · ')||'Local profile fallback.';
   document.getElementById('research-output').innerHTML=`<div class="card">
     <p class="section-label">WOULD I BUY THIS TODAY?</p>
     <div class="score-mini">
@@ -1922,7 +1978,10 @@ function renderResearchCard(r){
       <div class="detail-box"><div class="detail-label">VALUATION</div><div class="detail-text">${esc(r.valuationText)}</div></div>
       <div class="detail-box"><div class="detail-label">MACRO EXPOSURE</div><div class="detail-text">${esc(r.macroText)}</div></div>
       <div class="detail-box"><div class="detail-label">THESIS RISKS</div><div class="detail-text">${esc(r.risks)}</div></div>
+      <div class="detail-box"><div class="detail-label">RECENT NEWS</div><div class="detail-text">${newsHtml}</div></div>
+      <div class="detail-box"><div class="detail-label">SEC FILINGS</div><div class="detail-text">${filingsHtml}</div></div>
       <div class="detail-box"><div class="detail-label">CAPITAL REDEPLOYMENT</div><div class="detail-text">If this is not the best home for the next dollar, compare it against ${esc(alt)} and cash. Future v2 will rank against your whole portfolio.</div></div>
+      <div class="detail-box"><div class="detail-label">DATA SOURCES</div><div class="detail-text">${sourcesHtml}</div></div>
       <div class="detail-box"><div class="detail-label">FIT FOR YOU</div><div class="detail-text">Bias: accumulator, early-retirement minded, prefers great businesses during fear. This score rewards durable thesis plus improved entry, not short-term trading setups.</div></div>
     </div>
   </div>`;
@@ -1933,11 +1992,16 @@ async function runResearch(){
   const symbol=input.value.trim().toUpperCase();
   if(!symbol){status.textContent='Enter a ticker first.';return;}
   input.value=symbol;
-  status.textContent='Analyzing...';
+  status.textContent='Fetching free research data...';
   try{await loadScreener();}catch(e){}
-  window._currentResearch=buildResearch(symbol);
+  try{
+    window._currentResearch=await fetchLiveResearch(symbol);
+    status.textContent='Research ready from free quote, SEC, and news data. Save Snapshot stores this locally for later calibration.';
+  }catch(e){
+    window._currentResearch=buildResearch(symbol);
+    status.textContent='Live research route unavailable here, so using local fallback profile.';
+  }
   renderResearchCard(window._currentResearch);
-  status.textContent='Research ready. Save Snapshot stores this locally for later calibration.';
 }
 function saveCurrentResearch(){
   const status=document.getElementById('research-status');
