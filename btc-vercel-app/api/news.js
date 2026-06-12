@@ -38,6 +38,28 @@ function inferTicker(title = '') {
   return tickers.find(t => new RegExp(`\\b${t}\\b`).test(text)) || null;
 }
 
+function affectedAssets(title = '', theme = '') {
+  const text = `${title} ${theme}`.toLowerCase();
+  const assets = new Set();
+  if (/(bitcoin|btc|crypto|ethereum|eth|etf)/.test(text)) ['BTC','ETH','COIN','MSTR'].forEach(x => assets.add(x));
+  if (/(fed|rate|yield|cpi|inflation|jobs|treasury|liquidity|recession)/.test(text)) ['QQQ','VOO','BTC','MSFT','NVDA','PLTR'].forEach(x => assets.add(x));
+  if (/(chip|semiconductor|ai|nvidia|broadcom|micron|asml|tsm|data center|capex)/.test(text)) ['NVDA','AVGO','MU','ASML','TSM','AMD','VRT','ETN','PWR','FIX'].forEach(x => assets.add(x));
+  if (/(nuclear|power|grid|electricity|utility|data center load)/.test(text)) ['VST','BWXT','ETN','PWR','HUBB','FIX'].forEach(x => assets.add(x));
+  if (/(defense|drone|war|geopolitical|missile|rearmament)/.test(text)) ['KTOS','HWM','AXON','LMT','RTX'].forEach(x => assets.add(x));
+  if (/(water|drought|infrastructure)/.test(text)) ['XYL','MWA','PWR'].forEach(x => assets.add(x));
+  return [...assets].slice(0, 8);
+}
+
+function suggestedAction(item) {
+  const text = `${item.title || ''} ${item.theme || ''}`.toLowerCase();
+  if (/(fraud|bankrupt|criminal|default|restatement)/.test(text)) return 'Review thesis risk before adding capital.';
+  if (/(falls|drops|selloff|downgrade|cuts guidance|misses)/.test(text)) return 'Check Opportunity Feed for temporary selloff vs thesis break.';
+  if (/(fed|rate|yield|cpi|inflation|jobs|liquidity)/.test(text)) return 'Review portfolio risk, growth exposure, and BTC deployment context.';
+  if (/(bitcoin|btc|ethereum|eth|crypto|etf)/.test(text)) return 'Check BTC Score and crypto allocation before changing DCA/reserve plan.';
+  if (/(ai|data center|grid|nuclear|defense|water|infrastructure)/.test(text)) return 'Check Emerging Leaders and watchlist candidates tied to this theme.';
+  return 'Monitor; only act if it changes valuation, thesis, or capital allocation today.';
+}
+
 function inferTheme(title = '', category = '') {
   const text = `${title} ${category}`.toLowerCase();
   if (/(bitcoin|btc|crypto|ethereum|eth|etf)/.test(text)) return 'Crypto';
@@ -65,7 +87,7 @@ function whyItMatters(item) {
 function extractItems(xml, bucket) {
   const items = [];
   const blocks = String(xml).match(/<item>[\s\S]*?<\/item>/g) || [];
-  for (const block of blocks.slice(0, 10)) {
+  for (const block of blocks.slice(0, 14)) {
     const title = stripHtml((block.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) || block.match(/<title>([\s\S]*?)<\/title>/) || [,''])[1]);
     const link = stripHtml((block.match(/<link>([\s\S]*?)<\/link>/) || [,''])[1]);
     const pubDate = stripHtml((block.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [,''])[1]);
@@ -85,6 +107,8 @@ function extractItems(xml, bucket) {
     item.ageHours = hoursOld(pubDate);
     item.bigNews = isBigNews(item);
     item.decisionRelevant = affectsTodayDecision(item);
+    item.affected = affectedAssets(item.title, item.theme);
+    item.suggestedAction = suggestedAction(item);
     item.why = whyItMatters(item);
     items.push(item);
   }
@@ -103,11 +127,11 @@ function dedupe(items) {
 
 export default async function handler(req, res) {
   const buckets = [
-    { name: 'Market / Macro', category: 'MACRO', limit: 5, q: 'US stock market Fed jobs report Treasury yields inflation recession Reuters OR AP OR CNBC OR Bloomberg OR "Wall Street Journal" OR "Financial Times"' },
-    { name: 'Crypto', category: 'CRYPTO', limit: 4, q: 'bitcoin ethereum crypto ETF regulation market CoinDesk OR "The Block" OR Decrypt OR Reuters' },
-    { name: 'Opportunity Selloffs', category: 'OPPORTUNITIES', limit: 5, q: 'stock falls drops selloff earnings guidance downgrade valuation thesis intact NVDA AVGO MU ASML TSM META GOOGL AMZN MSFT Reuters CNBC Barrons Seeking Alpha' },
-    { name: 'Watchlist Companies', category: 'WATCHLIST', limit: 5, q: 'META GOOGL AMZN MSFT ASML TSM V MA ISRG CPRT AXON CRWD DDOG PWR FIX earnings guidance stock news' },
-    { name: 'Themes', category: 'THEMES', limit: 5, q: 'AI data center power grid nuclear defense drones water infrastructure reshoring market news Reuters CNBC Bloomberg' },
+    { name: 'Market / Macro', category: 'MACRO', limit: 7, q: 'US stock market Fed jobs report Treasury yields inflation recession Reuters OR AP OR CNBC OR Bloomberg OR "Wall Street Journal" OR "Financial Times"' },
+    { name: 'Crypto', category: 'CRYPTO', limit: 5, q: 'bitcoin ethereum crypto ETF regulation market CoinDesk OR "The Block" OR Decrypt OR Reuters' },
+    { name: 'Opportunity Selloffs', category: 'OPPORTUNITIES', limit: 6, q: 'stock falls drops selloff earnings guidance downgrade valuation thesis intact NVDA AVGO MU ASML TSM META GOOGL AMZN MSFT Reuters CNBC Barrons Seeking Alpha' },
+    { name: 'Watchlist Companies', category: 'WATCHLIST', limit: 6, q: 'META GOOGL AMZN MSFT ASML TSM V MA ISRG CPRT AXON CRWD DDOG PWR FIX earnings guidance stock news' },
+    { name: 'Themes', category: 'THEMES', limit: 6, q: 'AI data center power grid nuclear defense drones water infrastructure reshoring market news Reuters CNBC Bloomberg' },
     { name: 'Filings / Earnings', category: 'EARNINGS', limit: 4, q: 'earnings guidance SEC filing 10-Q 8-K earnings transcript stock market today' }
   ];
   const all = [];
@@ -139,7 +163,7 @@ export default async function handler(req, res) {
       updatedAt: new Date().toISOString(),
       policy: '24h normal news; 48h major context only if still decision-relevant',
       buckets: byBucket,
-      items: byBucket.flatMap(bucket => bucket.items).slice(0, 16)
+      items: byBucket.flatMap(bucket => bucket.items).slice(0, 24)
     });
   } catch (error) {
     return res.status(502).json({ updatedAt: new Date().toISOString(), buckets: [], items: [], error: 'News fetch failed.' });

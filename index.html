@@ -363,6 +363,12 @@ td strong{color:#c8caee;font-weight:500;}
   </div>
 
   <div class="card">
+    <p class="section-label">WATCHLIST RECOMMENDATIONS</p>
+    <p style="font-size:11px;color:#3a3d6a;line-height:1.6;margin-bottom:10px;">Names the app would consider adding next, based on Opportunity Feed, Emerging Leaders, and your existing saved watchlist.</p>
+    <div id="watchlist-recommendations"></div>
+  </div>
+
+  <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
       <div>
         <p class="section-label">BEST NEXT DOLLAR</p>
@@ -427,8 +433,9 @@ td strong{color:#c8caee;font-weight:500;}
     <div>
       <p class="section-label">EMERGING LEADERS</p>
       <p style="font-size:11px;color:#3a3d6a;">Find companies/themes gaining strength before they become obvious. This is separate from dip-buy Opportunities.</p>
+      <p style="font-size:10px;color:#3a3d6a;margin-top:4px;" id="emerging-status">Last refreshed: not yet this session</p>
     </div>
-    <button class="btn" onclick="renderEmergingLeaders()">↻ Refresh Leaders</button>
+    <button class="btn" onclick="refreshEmergingLeaders()">↻ Refresh Leaders</button>
   </div>
 
   <div class="card">
@@ -1185,6 +1192,61 @@ function renderBriefWatchlistMini(){
   if(!rows.length)return '<div class="brief-empty">No watchlist items yet. Add names from Opportunities, Emerging Leaders, or Research.</div>';
   return rows.map(({item,score})=>`<div class="metric-row"><span><strong>${esc(item.ticker)}</strong> ${sectorHtml(item.category||'Watchlist')}</span><strong style="color:${score.action.color};">${score.score} · ${esc(score.action.label)}</strong></div>`).join('');
 }
+function savedWatchlistSet(){
+  return new Set(watchlistRows().map(item=>String(item.ticker||'').toUpperCase()));
+}
+function watchlistRecommendations(){
+  const saved=savedWatchlistSet();
+  const opps=rankedOpportunities()
+    .filter(o=>!saved.has(o.ticker))
+    .slice(0,6)
+    .map(o=>{
+      const action=opportunityActionFor(o);
+      return {
+        ticker:o.ticker,
+        name:o.name,
+        source:'Opportunity Feed',
+        score:o.score,
+        color:action.color,
+        label:action.label,
+        why:`${action.copy} ${moveDirection(o.drop).label} ${moveDirection(o.drop).display}; ${o.setup?.risk?.level||'setup reviewed'}.`,
+        add:`addOpportunityToWatchlist('${esc(o.ticker)}')`
+      };
+    });
+  const emerging=[...EMERGING_LEADERS]
+    .filter(e=>!saved.has(e.ticker))
+    .sort((a,b)=>b.leader-a.leader)
+    .slice(0,6)
+    .map(e=>{
+      const action=emergingAction(e);
+      const score=Math.round(clamp(e.leader*0.28+e.revenue*0.20+e.guidance*0.18+e.narrative*0.20+e.institutional*0.14-(e.retail>75?8:0)));
+      return {
+        ticker:e.ticker,
+        name:e.name,
+        source:'Emerging Leaders',
+        score,
+        color:action.color,
+        label:action.label,
+        why:`Theme: ${e.theme}. ${e.entry}`,
+        add:`addEmergingToWatchlist('${esc(e.ticker)}')`
+      };
+    });
+  return [...opps,...emerging].sort((a,b)=>b.score-a.score).slice(0,5);
+}
+function renderWatchlistRecommendations(){
+  const el=document.getElementById('watchlist-recommendations');
+  if(!el)return;
+  const rows=watchlistRecommendations();
+  if(!rows.length){el.innerHTML='<div class="brief-empty">No new recommendation right now. Your best candidates may already be saved.</div>';return;}
+  el.innerHTML=rows.map((r,idx)=>`<div class="brief-action">
+    <div class="brief-action-rank" style="color:${r.color};">${idx+1}</div>
+    <div style="flex:1;">
+      <div class="news-title" style="color:${r.color};">${esc(r.ticker)} · ${esc(r.label)} <span style="color:#3a3d6a;">${esc(r.name)}</span></div>
+      <div class="news-body">${esc(r.source)} · Score ${Math.round(r.score)}/100<br>${esc(r.why)}</div>
+      <button class="btn" style="margin-top:8px;" onclick="${r.add}">Add to Watchlist</button>
+    </div>
+  </div>`).join('');
+}
 
 async function loadBrief(){
   const btn=document.getElementById('brief-refresh-btn');
@@ -1242,6 +1304,15 @@ async function loadBrief(){
       <p style="font-size:10px;color:#2a2d50;font-style:italic;margin-top:10px;">Open the Opportunities tab for expandable rationale and full ranking.</p>
     </div>
     </div>
+    <div class="card">
+      <p class="section-label" style="margin-bottom:14px;">LIVE MARKET HEADLINES</p>
+      <div id="live-news-list">
+        <div class="news-item">
+          <div class="news-title">Loading fresh headlines…</div>
+          <div class="news-body">Fetching market, macro, crypto, company, theme, and filing/earnings headlines. Normal news uses the last 24 hours; major context can remain for 48 hours.</div>
+        </div>
+      </div>
+    </div>
     <div class="brief-grid">
       <div class="card">
         <p class="section-label" style="margin-bottom:10px;">DECISION RADAR</p>
@@ -1251,16 +1322,6 @@ async function loadBrief(){
         <p class="section-label" style="margin-bottom:10px;">WATCHLIST PULL TRIGGERS</p>
         ${renderBriefWatchlistMini()}
         <p class="brief-policy">Scores combine fundamentals, thesis, valuation, technical setup, macro, history, opportunity, and confidence.</p>
-      </div>
-    </div>
-    
-    <div class="card">
-      <p class="section-label" style="margin-bottom:14px;">LIVE MARKET HEADLINES</p>
-      <div id="live-news-list">
-        <div class="news-item">
-          <div class="news-title">Loading fresh headlines…</div>
-          <div class="news-body">Fetching market, macro, crypto, company, theme, and filing/earnings headlines. Normal news uses the last 24 hours; major context can remain for 48 hours.</div>
-        </div>
       </div>
     </div>
     
@@ -1290,7 +1351,7 @@ async function loadLiveNews(){
         <div class="news-tag" style="color:#378ADD;border-color:#234d7a;">${esc(bucket.name)}</div>
         ${(bucket.items||[]).map(n=>`<div style="margin:8px 0 12px;">
           <div class="news-title">${n.bigNews?'BIG · ':''}${n.link?`<a href="${esc(n.link)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">${esc(n.title||'Untitled headline')}</a>`:esc(n.title||'Untitled headline')}</div>
-          <div class="news-body">${n.source?`${esc(n.source)} · `:''}${n.sourceTier?`${esc(n.sourceTier)} · `:''}${esc(n.published||'')}${Number.isFinite(n.ageHours)?` · ${n.ageHours.toFixed(1)}h old`:''}${n.ticker?` · ${esc(n.ticker)}`:''}${n.theme?` · ${esc(n.theme)}`:''}<br>${esc(n.why||'')}</div>
+          <div class="news-body">${n.source?`${esc(n.source)} · `:''}${n.sourceTier?`${esc(n.sourceTier)} · `:''}${esc(n.published||'')}${Number.isFinite(n.ageHours)?` · ${n.ageHours.toFixed(1)}h old`:''}${n.ticker?` · ${esc(n.ticker)}`:''}${n.theme?` · ${esc(n.theme)}`:''}<br>${esc(n.why||'')}${n.affected?.length?`<br>Affected: ${esc(n.affected.join(', '))}`:''}${n.suggestedAction?`<br>Action: ${esc(n.suggestedAction)}`:''}</div>
         </div>`).join('')}
       </div>`).join('');
     }else{
@@ -1521,17 +1582,17 @@ function renderOpportunities(){
     const liveTag=item.isLive?'<span style="color:#1D9E75;font-size:9px;margin-left:6px;">● LIVE</span>':'<span style="color:#3a3d6a;font-size:9px;margin-left:6px;">est.</span>';
     const newsMeta=item.liveNews?`${item.liveNews.source||'News'}${Number.isFinite(item.liveNews.ageHours)?' · '+item.liveNews.ageHours.toFixed(1)+'h old':''}${item.liveNews.thesisRisk?' · '+item.liveNews.thesisRisk:''}`:'Placeholder context — waiting for a live down-5% news trigger.';
     const chips=[
-      `${setup.downEnough?'5%+ selloff':'No 5% selloff'}`,
-      `${setup.valuationImproved?'Valuation improved':'Entry not improved enough'}`,
-      setup.risk.level,
-      item.liveNews?'Live news linked':'Needs live news'
+      moveHtml(item.drop),
+      esc(setup.valuationImproved?'Valuation improved':'Entry not improved enough'),
+      esc(setup.risk.level),
+      esc(item.liveNews?'Live news linked':'Needs live news')
     ];
     return `<div class="op-card">
       <div class="op-head" onclick="toggleCard(this)">
         <div>
           <div class="op-ticker">${item.ticker}${liveTag} <span style="font-size:10px;color:#3a3d6a;">${item.name}</span></div>
           <div class="op-sub">${moveHtml(item.drop)}${priceTag} · ${sectorHtml(item.category)}</div>
-          <div class="op-chip-row">${chips.map(c=>`<span class="op-chip">${esc(c)}</span>`).join('')}</div>
+          <div class="op-chip-row">${chips.map(c=>`<span class="op-chip">${c}</span>`).join('')}</div>
         </div>
         <div>
           <div class="op-score" style="color:${a.color};">${item.score}</div>
@@ -1572,6 +1633,12 @@ function renderEmergingLeaders(){
   const rows=[...EMERGING_LEADERS].sort((a,b)=>b.leader-a.leader);
   const el=document.getElementById('emerging-list');
   if(!el)return;
+  const status=document.getElementById('emerging-status');
+  if(status){
+    const updated=window._screenerUpdatedAt?new Date(window._screenerUpdatedAt).toLocaleTimeString():'not yet this session';
+    const mode=window._screenerUpdatedAt?'live prices/news when available':'local scoring only';
+    status.textContent=`Last refreshed: ${updated} · ${mode}`;
+  }
   el.innerHTML=rows.map(item=>{
     const a=emergingAction(item);
     const retailNote=item.retail>=80?'Retail sentiment is hot; require better entry discipline.':item.retail<=45?'Retail attention is low; could be early if fundamentals are improving.':'Retail sentiment is present but not overheated.';
@@ -1600,6 +1667,17 @@ function renderEmergingLeaders(){
       </div>
     </div>`;
   }).join('');
+}
+async function refreshEmergingLeaders(){
+  const status=document.getElementById('emerging-status');
+  if(status)status.textContent='Refreshing live prices and news...';
+  try{
+    await loadScreener();
+    if(status)status.textContent=`Last refreshed: ${new Date(window._screenerUpdatedAt||Date.now()).toLocaleTimeString()} · live prices/news when available`;
+  }catch(e){
+    renderEmergingLeaders();
+    if(status)status.textContent='Last refresh failed · using local scoring only';
+  }
 }
 
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -1821,6 +1899,7 @@ function renderWatchlist(){
   const el=document.getElementById('watchlist-list');
   if(!el)return;
   renderBestNextDollar();
+  renderWatchlistRecommendations();
   const rows=watchlistRows().map(item=>({item,score:watchlistScore(item)})).sort((a,b)=>b.score.score-a.score.score);
   if(!rows.length){el.innerHTML='<div class="card"><p class="section-label">WATCHLIST EMPTY</p><p style="font-size:12px;color:#5a5d8a;">Add tickers from Opportunities, Emerging Leaders, or the manual box above.</p></div>';return;}
   el.innerHTML=rows.map(({item,score})=>{
@@ -2427,6 +2506,7 @@ async function loadScreener(){
     const d=await r.json();
     (d.quotes||[]).forEach(q=>{ window._screenerData[q.symbol]=q; });
     window._opportunityNews=d.newsBySymbol||{};
+    window._screenerUpdatedAt=d.updatedAt||new Date().toISOString();
     if(statusEl)statusEl.textContent='Prices updated '+new Date(d.updatedAt).toLocaleTimeString();
     renderOpportunities();
     renderEmergingLeaders();
