@@ -2172,6 +2172,8 @@ function renderPortfolio(){
   const rows=portfolio();
   const analysis=document.getElementById('portfolio-analysis');
   if(analysis)analysis.innerHTML=rows.length?'Click Analyze Master Portfolio after loading holdings.':'Add holdings or import a CSV first.';
+  const intelligence=document.getElementById('portfolio-intelligence');
+  if(intelligence)intelligence.innerHTML=rows.length?'Analyze Master Portfolio to compare holdings, watchlist candidates, and redeployment choices.':'Add holdings or import a CSV first.';
   const total=rows.reduce((a,r)=>a+(Number(r.qty||0)*Number(r.price||0)),0);
   const aggregated=aggregateHoldings(rows).sort((a,b)=>b.value-a.value);
   const byAccount=ACCOUNT_BUCKETS.map(account=>{
@@ -2254,22 +2256,99 @@ function portfolioAction(score,alloc){
   if(score>=45)return 'Reduce';
   return 'Exit Review';
 }
+function portfolioConfidence(row){
+  const known=!!(RESEARCH_PROFILES[row.symbol]||WATCHLIST.find(x=>x.ticker===row.symbol)||EMERGING_LEADERS.find(x=>x.ticker===row.symbol));
+  let score=known?72:48;
+  if(row.value>0)score+=8;
+  if(row.assetClass==='ETF / Fund')score+=10;
+  if(row.assetClass==='Crypto')score+=currentCycleScore()!==null?8:-5;
+  return clamp(score);
+}
 function scoreHolding(row,total){
   if(row.isCash||row.assetClass==='Cash')return {...row,score:null,alloc:total?row.value/total*100:0,sector:'Cash Reserve',theme:'Dry powder / liquidity',action:'Cash Reserve'};
   const profile=researchProfile(row.symbol);
   const defaults=RESEARCH_SCORE_DEFAULTS[row.symbol]||{};
   const valuationScore=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:defaults.valuation??50));
   const macroScore=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:defaults.macro??50));
-  const base=clamp(profile.fundamental*0.25+profile.thesis*0.25+valuationScore*0.18+macroScore*0.12+profile.opportunity*0.20);
+  const opportunity=clamp(profile.opportunity??50);
+  const confidence=portfolioConfidence(row);
+  const base=clamp(profile.fundamental*0.23+profile.thesis*0.23+valuationScore*0.17+macroScore*0.12+opportunity*0.17+confidence*0.08);
   const alloc=total?row.value/total*100:0;
-  const concentrationPenalty=alloc>25?10:alloc>15?5:0;
+  const concentrationPenalty=alloc>25?12:alloc>15?6:0;
   const score=Math.round(clamp(base-concentrationPenalty));
-  return {...row,score,alloc,sector:sectorFor(row.symbol),theme:themeFor(row.symbol),action:portfolioAction(score,alloc),fundamental:profile.fundamental,thesis:profile.thesis,valuationScore,macroScore,opportunity:profile.opportunity};
+  return {...row,score,alloc,sector:sectorFor(row.symbol),theme:themeFor(row.symbol),action:portfolioAction(score,alloc),fundamental:profile.fundamental,thesis:profile.thesis,valuationScore,macroScore,opportunity,confidence};
 }
 function exposureRows(scored,key,total){
   const map=new Map();
   scored.forEach(r=>map.set(r[key],(map.get(r[key])||0)+r.value));
   return [...map.entries()].sort((a,b)=>b[1]-a[1]).map(([name,value])=>`<div class="metric-row"><span>${esc(name)}</span><strong>${money(value)} · ${total?(value/total*100).toFixed(1):'0.0'}%</strong></div>`).join('');
+}
+function magSevenExposure(scored){
+  const mag=new Set(['AAPL','MSFT','NVDA','AMZN','META','GOOGL','GOOG','TSLA']);
+  return scored.filter(r=>mag.has(r.symbol)).reduce((a,r)=>a+r.value,0);
+}
+function aiSemiExposure(scored){
+  return scored.filter(r=>/(AI|Semiconductor|semis|data center|Cloud|Software)/i.test(`${r.theme} ${r.sector}`)).reduce((a,r)=>a+r.value,0);
+}
+function speculativeExposure(scored){
+  return scored.filter(r=>r.score!==null&&(r.score<58||/(Speculative|space|fintech|crypto apps|autonomy)/i.test(`${r.theme} ${r.sector}`))).reduce((a,r)=>a+r.value,0);
+}
+function redeploymentCandidates(excludeSymbol=''){
+  const saved=savedWatchlistSet();
+  const candidates=[];
+  buildNextDollarCandidates().forEach(c=>{
+    if(c.symbol!==excludeSymbol&&c.symbol!=='CASH')candidates.push({symbol:c.symbol,score:c.score,action:c.action?.label||'REVIEW',why:c.reason||c.action?.copy||'Portfolio-aware candidate'});
+  });
+  rankedOpportunities().slice(0,5).forEach(o=>{
+    if(o.ticker!==excludeSymbol)candidates.push({symbol:o.ticker,score:o.score,action:opportunityActionFor(o).label,why:opportunityActionFor(o).copy});
+  });
+  watchlistRecommendations().forEach(w=>{
+    if(w.ticker!==excludeSymbol&&!saved.has(w.ticker))candidates.push({symbol:w.ticker,score:w.score,action:w.label,why:w.why});
+  });
+  candidates.push({symbol:'VOO',score:68,action:'CORE ADD',why:'Broad market core when no single-stock opportunity clears the bar.'});
+  candidates.push({symbol:'CASH',score:62,action:'WAIT',why:'Keep dry powder if alternatives are not clearly superior.'});
+  const map=new Map();
+  candidates.forEach(c=>{
+    const old=map.get(c.symbol);
+    if(!old||c.score>old.score)map.set(c.symbol,c);
+  });
+  return [...map.values()].sort((a,b)=>b.score-a.score).slice(0,4);
+}
+function redeploymentRows(scored){
+  return scored
+    .filter(r=>r.score!==null&&(r.score<58||r.alloc>15))
+    .sort((a,b)=>(a.score-b.score)||(b.alloc-a.alloc))
+    .slice(0,6)
+    .map(r=>{
+      const dest=redeploymentCandidates(r.symbol)[0];
+      const reason=r.alloc>15?'oversized position':'lower score holding';
+      return {...r,reason,destination:dest};
+    });
+}
+function renderPortfolioIntelligence(scored,total){
+  const el=document.getElementById('portfolio-intelligence');
+  if(!el)return;
+  if(!scored.length){el.innerHTML='Add holdings or import a CSV first.';return;}
+  const investments=scored.filter(r=>r.score!==null);
+  const weak=redeploymentRows(scored);
+  const topWatch=watchlistRecommendations().slice(0,4);
+  const cash=scored.filter(r=>r.score===null).reduce((a,r)=>a+r.value,0);
+  const mag=magSevenExposure(scored), ai=aiSemiExposure(scored), spec=speculativeExposure(scored);
+  const concentration=scored.filter(r=>r.alloc>=10).sort((a,b)=>b.alloc-a.alloc).slice(0,8);
+  const redeployHtml=weak.length?weak.map(r=>`<div class="metric-row"><span><strong>${esc(r.symbol)}</strong> · ${esc(r.action)} · ${r.alloc.toFixed(1)}% · ${esc(r.reason)}</span><strong>${esc(r.destination?.symbol||'CASH')} · ${esc(r.destination?.action||'WAIT')}</strong></div>`).join(''):'<div class="brief-empty">No obvious reduce/redeploy candidates from current scores.</div>';
+  const watchHtml=topWatch.length?topWatch.map(w=>`<div class="metric-row"><span><strong>${esc(w.ticker)}</strong> · ${esc(w.source)}</span><strong style="color:${w.color};">${Math.round(w.score)} · ${esc(w.label)}</strong></div>`).join(''):'<div class="brief-empty">No unsaved watchlist recommendation currently outranks saved names.</div>';
+  el.innerHTML=`<div class="grid-2">
+    <div class="detail-box"><div class="detail-label">REDEPLOYMENT CANDIDATES</div><div class="detail-text">${redeployHtml}</div></div>
+    <div class="detail-box"><div class="detail-label">WATCHLIST VS PORTFOLIO</div><div class="detail-text">${watchHtml}</div></div>
+    <div class="detail-box"><div class="detail-label">CONCENTRATION FLAGS</div><div class="detail-text">
+      Mag 7 / mega-cap tech: ${total?(mag/total*100).toFixed(1):'0.0'}%<br>
+      AI / semis / cloud: ${total?(ai/total*100).toFixed(1):'0.0'}%<br>
+      Speculative / lower-score sleeve: ${total?(spec/total*100).toFixed(1):'0.0'}%<br>
+      Cash / dry powder: ${total?(cash/total*100).toFixed(1):'0.0'}%
+    </div></div>
+    <div class="detail-box"><div class="detail-label">TOP POSITION SIZES</div><div class="detail-text">${concentration.length?concentration.map(r=>`${esc(r.symbol)} ${r.alloc.toFixed(1)}%`).join('<br>'):'No position above 10%.'}</div></div>
+  </div>
+  <p class="brief-policy">Interpretation: add to high-score underweight holdings first; review low-score or oversized holdings only when a clearly better destination exists.</p>`;
 }
 function analyzePortfolio(){
   const rows=portfolio();
@@ -2283,7 +2362,7 @@ function analyzePortfolio(){
   const strongest=investments.slice(0,5);
   const weakest=[...investments].sort((a,b)=>a.score-b.score).slice(0,5);
   const cashValue=cashRows.reduce((a,r)=>a+r.value,0);
-  const actionRows=investments.map(r=>`<tr><td><strong>${esc(r.symbol)}</strong></td><td>${r.score}</td><td>${esc(r.action)}</td><td>${r.alloc.toFixed(1)}%</td><td>${sectorHtml(r.theme)}</td><td>${sectorHtml(r.sector)}</td></tr>`).join('');
+  const actionRows=investments.map(r=>`<tr><td><strong>${esc(r.symbol)}</strong></td><td>${r.score}</td><td>${esc(r.action)}</td><td>${r.alloc.toFixed(1)}%</td><td>${Math.round(r.fundamental)}</td><td>${Math.round(r.thesis)}</td><td>${Math.round(r.valuationScore)}</td><td>${Math.round(r.macroScore)}</td><td>${Math.round(r.opportunity)}</td><td>${Math.round(r.confidence)}</td><td>${sectorHtml(r.theme)}</td></tr>`).join('');
   box.innerHTML=`<div class="grid-2">
     <div class="detail-box"><div class="detail-label">HIGHEST CONVICTION</div><div class="detail-text">${strongest.length?strongest.map(r=>`${esc(r.symbol)} ${r.score} (${esc(r.action)})`).join('<br>'):'No scored investments yet.'}</div></div>
     <div class="detail-box"><div class="detail-label">WEAKEST HOLDINGS</div><div class="detail-text">${weakest.length?weakest.map(r=>`${esc(r.symbol)} ${r.score} (${esc(r.action)})`).join('<br>'):'No scored investments yet.'}</div></div>
@@ -2295,7 +2374,8 @@ function analyzePortfolio(){
     <div class="detail-box"><div class="detail-label">THEME EXPOSURE</div><div class="detail-text">${exposureRows(allScored,'theme',total)}</div></div>
     <div class="detail-box"><div class="detail-label">SECTOR EXPOSURE</div><div class="detail-text">${exposureRows(allScored,'sector',total)}</div></div>
   </div>
-  <div class="table-wrap"><table><thead><tr><th>Ticker</th><th>Buy Today Score</th><th>Action</th><th>Alloc</th><th>Theme</th><th>Sector</th></tr></thead><tbody>${actionRows||'<tr><td colspan="6">No scored investments yet.</td></tr>'}</tbody></table></div>`;
+  <div class="table-wrap"><table><thead><tr><th>Ticker</th><th>Buy Today</th><th>Action</th><th>Alloc</th><th>Fund</th><th>Thesis</th><th>Val</th><th>Macro</th><th>Opp</th><th>Conf</th><th>Theme</th></tr></thead><tbody>${actionRows||'<tr><td colspan="11">No scored investments yet.</td></tr>'}</tbody></table></div>`;
+  renderPortfolioIntelligence(allScored,total);
 }
 function memorySnapshots(){try{return JSON.parse(localStorage.getItem(MEMORY_SNAPSHOTS_KEY)||'[]');}catch(e){return [];}}
 function saveMemorySnapshots(rows){localStorage.setItem(MEMORY_SNAPSHOTS_KEY,JSON.stringify(rows.slice(0,200)));renderMemorySnapshots();}
