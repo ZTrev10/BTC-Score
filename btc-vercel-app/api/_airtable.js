@@ -143,12 +143,22 @@ function json(res, status, body) {
 
 function snapshotRecord(snapshot) {
   const createdAt = snapshot?.createdAt || new Date().toISOString();
+  return memoryRecord(
+    `${snapshot?.eventType || 'Daily Snapshot'} ${createdAt.slice(0, 10)}`,
+    createdAt,
+    snapshot,
+    snapshot?.notes || ''
+  );
+}
+
+function memoryRecord(name, date, payload, notes = '') {
+  const isoDate = String(date || new Date().toISOString()).slice(0, 10);
   return {
-    Name: `${snapshot?.eventType || 'Daily Snapshot'} ${createdAt.slice(0, 10)}`,
-    Date: createdAt.slice(0, 10),
-    Payload: JSON.stringify(snapshot || {}, null, 2),
-    Notes: snapshot?.notes || ''
+    Name: String(name || `Record ${isoDate}`),
+    Date: isoDate,
+    Payload: JSON.stringify(payload || {}, null, 2),
+    Notes: String(notes || '')
   };
 }
 
-export { TABLES, FIELDS, airtableData, ensureSchema, json, snapshotRecord };
+export { TABLES, FIELDS, airtableData, ensureSchema, json, memoryRecord, snapshotRecord };

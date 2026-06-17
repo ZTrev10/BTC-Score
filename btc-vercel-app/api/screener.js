@@ -4,6 +4,8 @@
 const DEFAULT_SYMBOLS = [
   'META','GOOGL','AMZN','MSFT','ASML','TSM','V','MA','ISRG','CPRT','FIX','PWR','AXON','CRWD','DDOG','TMDX',
   'KTOS','HWM','BWXT','VST','ETN','HUBB','XYL','MWA',
+  'IDXX','RMD','SYK','BSX','BRO','AJG','SPGI','MCO','ICE','ROP','DHR','TDG','GWW','FAST','ORLY','AZO','TJX','COST',
+  'CEG','GEV','EME','WCC',
   'NVDA','GOOGL','AMZN','MSFT','AAPL'          // reference names
 ];
 
@@ -31,7 +33,29 @@ const COMPANY_HINTS = {
   ETN: 'Eaton',
   HUBB: 'Hubbell',
   XYL: 'Xylem',
-  MWA: 'Mueller Water Products'
+  MWA: 'Mueller Water Products',
+  IDXX: 'IDEXX Laboratories',
+  RMD: 'ResMed',
+  SYK: 'Stryker',
+  BSX: 'Boston Scientific',
+  BRO: 'Brown & Brown',
+  AJG: 'Arthur J. Gallagher',
+  SPGI: 'S&P Global',
+  MCO: "Moody's",
+  ICE: 'Intercontinental Exchange',
+  ROP: 'Roper Technologies',
+  DHR: 'Danaher',
+  TDG: 'TransDigm',
+  GWW: 'W.W. Grainger',
+  FAST: 'Fastenal',
+  ORLY: 'OReilly Automotive',
+  AZO: 'AutoZone',
+  TJX: 'TJX Companies',
+  COST: 'Costco',
+  CEG: 'Constellation Energy',
+  GEV: 'GE Vernova',
+  EME: 'EMCOR Group',
+  WCC: 'WESCO International'
 };
 
 function stripHtml(input = '') {

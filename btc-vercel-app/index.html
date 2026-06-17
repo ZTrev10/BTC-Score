@@ -1202,11 +1202,39 @@ function renderBriefWatchlistMini(){
 function savedWatchlistSet(){
   return new Set(watchlistRows().map(item=>String(item.ticker||'').toUpperCase()));
 }
+function widerMarketCandidateScore(c){
+  const move=liveChangeFor(c.ticker);
+  const price=livePriceFor(c.ticker);
+  const news=liveNewsFor(c.ticker);
+  const history=historyScoreFor(c.ticker,c.theme);
+  const technical=Number.isFinite(move)?(move<0?clamp(55+Math.min(24,Math.abs(move)*3.2)):clamp(48-Math.min(14,Math.abs(move)*1.4))):52;
+  const valuation=clamp(c.valuation+(Number.isFinite(move)&&move<0?Math.min(14,Math.abs(move)*1.8):0));
+  const thesisPenalty=news?.thesisRisk==='thesis-breaking'?32:news?.thesisRisk==='verify'?8:0;
+  const liveBonus=news?4:0;
+  const score=Math.round(clamp(
+    c.quality*0.21+
+    c.thesis*0.20+
+    valuation*0.17+
+    c.macro*0.13+
+    c.confidence*0.11+
+    technical*0.11+
+    history.score*0.07+
+    liveBonus-
+    thesisPenalty
+  ));
+  let action={label:'WATCH ONLY',color:'#BA7517',copy:'Good business, but not enough edge yet.'};
+  if(score>=84&&Number.isFinite(move)&&move<=-4&&valuation>=66&&c.confidence>=62)action={label:'RARE SETUP REVIEW',color:'#1D9E75',copy:'Quality, thesis, valuation relief, and price action line up. Verify current news before buying.'};
+  else if(score>=76)action={label:'HIGH-PRIORITY REVIEW',color:'#639922',copy:'Strong candidate to research now; could deserve a watchlist slot.'};
+  else if(score>=68)action={label:'ADD TO WATCHLIST',color:'#BA7517',copy:'Worth tracking, but wait for a better price or stronger confirmation.'};
+  else if(score<58)action={label:'SKIP',color:'#E24B4A',copy:'Not compelling enough for the watchlist today.'};
+  return {score,action,price,move,valuation,technical,history,news};
+}
 function watchlistRecommendations(){
   const saved=savedWatchlistSet();
   const opps=rankedOpportunities()
     .filter(o=>!saved.has(o.ticker))
-    .slice(0,6)
+    .filter(o=>!['AVOID','TOO RISKY'].includes(opportunityActionFor(o).label))
+    .slice(0,8)
     .map(o=>{
       const action=opportunityActionFor(o);
       return {
@@ -1223,7 +1251,8 @@ function watchlistRecommendations(){
   const emerging=[...EMERGING_LEADERS]
     .filter(e=>!saved.has(e.ticker))
     .sort((a,b)=>b.leader-a.leader)
-    .slice(0,6)
+    .filter(e=>!['TOO EARLY'].includes(emergingAction(e).label))
+    .slice(0,8)
     .map(e=>{
       const action=emergingAction(e);
       const score=Math.round(clamp(e.leader*0.28+e.revenue*0.20+e.guidance*0.18+e.narrative*0.20+e.institutional*0.14-(e.retail>75?8:0)));
@@ -1238,7 +1267,23 @@ function watchlistRecommendations(){
         add:`addEmergingToWatchlist('${esc(e.ticker)}')`
       };
     });
-  return [...opps,...emerging].sort((a,b)=>b.score-a.score).slice(0,5);
+  const wider=WIDER_MARKET_CANDIDATES
+    .filter(c=>!saved.has(c.ticker))
+    .map(c=>({c,setup:widerMarketCandidateScore(c)}))
+    .filter(({setup})=>setup.score>=68&&setup.action.label!=='SKIP')
+    .sort((a,b)=>b.setup.score-a.setup.score)
+    .slice(0,10)
+    .map(({c,setup})=>({
+      ticker:c.ticker,
+      name:c.name,
+      source:'Wider Market Scan',
+      score:setup.score,
+      color:setup.action.color,
+      label:setup.action.label,
+      why:`${setup.action.copy} ${Number.isFinite(setup.move)?moveDirection(setup.move).label+' '+moveDirection(setup.move).display:'Move unavailable'} · ${c.category} · ${c.notes}`,
+      add:`addWiderMarketToWatchlist('${esc(c.ticker)}')`
+    }));
+  return [...opps,...emerging,...wider].sort((a,b)=>b.score-a.score).slice(0,7);
 }
 function renderWatchlistRecommendations(){
   const el=document.getElementById('watchlist-recommendations');
@@ -1411,9 +1456,34 @@ const EMERGING_LEADERS=[
   {ticker:'XYL',name:'Xylem',theme:'Water infrastructure / measurement / municipal resilience',leader:72,revenue:66,guidance:70,narrative:84,institutional:62,retail:22,entry:'Best on municipal budget fear if orders and backlog stay healthy.',risk:'Municipal spending, integration risk, valuation.'},
   {ticker:'MWA',name:'Mueller Water Products',theme:'Water infrastructure replacement / municipal resilience',leader:69,revenue:62,guidance:66,narrative:78,institutional:52,retail:22,entry:'Early/quiet theme. Look for evidence of order acceleration from water infrastructure spend.',risk:'Municipal budgets, slow growth, cyclicality.'}
 ];
+const WIDER_MARKET_CANDIDATES=[
+  {ticker:'IDXX',name:'IDEXX Laboratories',category:'Healthcare compounder',theme:'Pet healthcare diagnostics / recurring consumables',quality:88,thesis:82,valuation:54,macro:70,confidence:68,notes:'High-quality diagnostics model. Best after valuation compression or veterinary demand fears, not if testing volume structurally weakens.'},
+  {ticker:'RMD',name:'ResMed',category:'Healthcare compounder',theme:'Sleep apnea devices / connected respiratory care',quality:84,thesis:78,valuation:62,macro:68,confidence:66,notes:'Durable sleep-health market with recurring masks/supplies. Watch GLP-1 fear and reimbursement pressure for temporary dislocations.'},
+  {ticker:'SYK',name:'Stryker',category:'Healthcare equipment',theme:'Orthopedic devices / surgical equipment',quality:86,thesis:78,valuation:56,macro:70,confidence:70,notes:'Steady medtech compounder. Attractive when procedure-cycle fears create a better entry without damaging market share.'},
+  {ticker:'BSX',name:'Boston Scientific',category:'Healthcare equipment',theme:'Cardiology / medtech innovation',quality:82,thesis:78,valuation:52,macro:68,confidence:66,notes:'Strong procedure exposure and product cycle. Require valuation discipline after strong runs.'},
+  {ticker:'BRO',name:'Brown & Brown',category:'Insurance compounder',theme:'Insurance brokerage / fragmented market roll-up',quality:86,thesis:82,valuation:58,macro:74,confidence:70,notes:'Capital-light brokerage with acquisition runway. Best on insurance-cycle or multiple-compression pullbacks.'},
+  {ticker:'AJG',name:'Arthur J. Gallagher',category:'Insurance compounder',theme:'Insurance brokerage / risk advisory',quality:85,thesis:80,valuation:55,macro:74,confidence:70,notes:'Durable brokerage economics. Prefer pullbacks where organic growth and acquisition discipline remain intact.'},
+  {ticker:'SPGI',name:'S&P Global',category:'Financial data moat',theme:'Ratings / indexes / market data',quality:89,thesis:84,valuation:56,macro:66,confidence:72,notes:'Wide-moat data and ratings business. Cyclical issuance fear can create openings if the long-term data moat holds.'},
+  {ticker:'MCO',name:"Moody's",category:'Financial data moat',theme:'Credit ratings / analytics',quality:88,thesis:82,valuation:55,macro:64,confidence:70,notes:'High-margin ratings and analytics. Best when debt issuance weakness is cyclical rather than thesis-breaking.'},
+  {ticker:'ICE',name:'Intercontinental Exchange',category:'Market infrastructure',theme:'Exchanges / fixed income data / mortgage tech',quality:84,thesis:78,valuation:60,macro:68,confidence:68,notes:'Market infrastructure plus data assets. Watch for temporary mortgage-cycle or integration concerns.'},
+  {ticker:'ROP',name:'Roper Technologies',category:'Industrial software compounder',theme:'Niche vertical software / asset-light industrials',quality:88,thesis:82,valuation:52,macro:66,confidence:68,notes:'Excellent serial compounder profile. Needs valuation discipline; best during broad quality-stock selloffs.'},
+  {ticker:'DHR',name:'Danaher',category:'Life science tools',theme:'Bioprocessing / diagnostics / life-science tools',quality:86,thesis:78,valuation:62,macro:64,confidence:68,notes:'High-quality life-science platform. Attractive if destocking fears fade and core demand stabilizes.'},
+  {ticker:'TDG',name:'TransDigm',category:'Aerospace compounder',theme:'Aftermarket aerospace components / pricing power',quality:87,thesis:82,valuation:48,macro:66,confidence:66,notes:'Exceptional aerospace economics, but usually expensive. Only interesting after real multiple compression.'},
+  {ticker:'GWW',name:'W.W. Grainger',category:'Industrial distributor',theme:'MRO distribution / pricing discipline',quality:84,thesis:76,valuation:54,macro:64,confidence:66,notes:'Quiet industrial compounder. Look for industrial-cycle fear, not margin deterioration.'},
+  {ticker:'FAST',name:'Fastenal',category:'Industrial distributor',theme:'Industrial supplies / onsite distribution',quality:82,thesis:74,valuation:50,macro:62,confidence:64,notes:'Good business, often fully valued. Needs a better price or clearer industrial recovery setup.'},
+  {ticker:'ORLY',name:'OReilly Automotive',category:'Consumer compounder',theme:'Auto parts / repair demand / buybacks',quality:88,thesis:82,valuation:56,macro:72,confidence:70,notes:'Defensive compounder with strong execution. Best on consumer slowdown fear if same-store trends remain healthy.'},
+  {ticker:'AZO',name:'AutoZone',category:'Consumer compounder',theme:'Auto parts / repair demand / buybacks',quality:87,thesis:80,valuation:55,macro:72,confidence:68,notes:'Durable auto-parts model and capital allocation. Watch entry price and leverage.'},
+  {ticker:'TJX',name:'TJX Companies',category:'Consumer value retail',theme:'Off-price retail / bargain hunting / inventory cycles',quality:82,thesis:76,valuation:58,macro:76,confidence:68,notes:'Can benefit when consumers trade down. Attractive on retail fear if traffic stays strong.'},
+  {ticker:'COST',name:'Costco',category:'Defensive compounder',theme:'Membership retail / consumer staples-like loyalty',quality:92,thesis:88,valuation:42,macro:78,confidence:74,notes:'Wonderful business, usually expensive. Add only when the score shows rare valuation relief.'},
+  {ticker:'CEG',name:'Constellation Energy',category:'Power / nuclear',theme:'Nuclear power / grid load growth / data center demand',quality:80,thesis:82,valuation:56,macro:78,confidence:64,notes:'Power-demand beneficiary with nuclear scarcity. Avoid chasing policy spikes; prefer regulatory or power-price pullbacks.'},
+  {ticker:'GEV',name:'GE Vernova',category:'Grid / power equipment',theme:'Electrification / grid hardware / power generation',quality:76,thesis:80,valuation:54,macro:82,confidence:58,notes:'Power buildout candidate, but younger public-company history. Require execution evidence and valuation discipline.'},
+  {ticker:'EME',name:'EMCOR Group',category:'Infrastructure services',theme:'Electrical/mechanical construction / data centers',quality:82,thesis:80,valuation:60,macro:78,confidence:64,notes:'Infrastructure and data-center services exposure. Watch backlog and margin durability after pullbacks.'},
+  {ticker:'WCC',name:'WESCO International',category:'Electrical distribution',theme:'Electrification / utility and data-center supply chain',quality:70,thesis:72,valuation:66,macro:76,confidence:56,notes:'More cyclical and levered than the highest-quality names. Only recommend when valuation and setup compensate.'}
+];
 
 const RESEARCH_HISTORY_KEY='trevor_research_history_v1';
 const MEMORY_SNAPSHOTS_KEY='trevor_memory_snapshots_v1';
+const AUTO_MEMORY_SNAPSHOT_KEY='trevor_auto_memory_snapshot_date_v1';
 const WATCHLIST_STORAGE_KEY='trevor_watchlist_v1';
 const RESEARCH_PROFILES={
   META:{name:'Meta Platforms',type:'Quality compounder',fundamental:90,thesis:86,valuation:68,macro:72,opportunity:70,summary:'Scaled ad network plus AI-enabled engagement and efficiency. Best when regulatory or reputation fear creates a valuation reset without breaking the core ad engine.',bull:'AI improves ad targeting, Reels monetization continues, WhatsApp and business messaging become larger profit pools, and Reality Labs losses stay contained.',bear:'Regulation, platform fatigue, capex intensity, or a failed metaverse/AI spending cycle could compress margins and multiple.',valuation:'Usually worth owning only with discipline. Strong business quality can justify a premium, but the best entries come after fear-driven drawdowns.',macro:'Sensitive to consumer ads, regulation, AI capex, and broad risk appetite.',risks:'Regulatory shocks, privacy changes, AI infrastructure spend, management capital allocation.'},
@@ -1699,6 +1769,8 @@ function watchlistSeedFor(ticker){
   if(opp)return {ticker:sym,name:opp.name,source:'Opportunities',category:opp.category,theme:themeFor(sym),notes:opp.reason};
   const emerging=EMERGING_LEADERS.find(x=>x.ticker===sym);
   if(emerging)return {ticker:sym,name:emerging.name,source:'Emerging Leaders',category:'Emerging leader',theme:emerging.theme,notes:emerging.entry};
+  const wider=WIDER_MARKET_CANDIDATES.find(x=>x.ticker===sym);
+  if(wider)return {ticker:sym,name:wider.name,source:'Wider Market Scan',category:wider.category,theme:wider.theme,notes:wider.notes};
   const profile=RESEARCH_PROFILES[sym];
   if(profile)return {ticker:sym,name:profile.name,source:'Research',category:profile.type,theme:themeFor(sym),notes:profile.summary};
   return {ticker:sym,name:sym,source:'Manual',category:'Unclassified ticker',theme:themeFor(sym),notes:''};
@@ -1733,6 +1805,10 @@ function addOpportunityToWatchlist(ticker){
 function addEmergingToWatchlist(ticker){
   const seed=watchlistSeedFor(ticker);
   upsertWatchlistItem({...seed,source:'Emerging Leaders'});
+}
+function addWiderMarketToWatchlist(ticker){
+  const seed=watchlistSeedFor(ticker);
+  upsertWatchlistItem({...seed,source:'Wider Market Scan'});
 }
 function removeWatchlistItem(ticker){
   const sym=String(ticker||'').trim().toUpperCase();
@@ -2396,6 +2472,10 @@ function collectSnapshot(){
   const cycle=window._cycleScore||null;
   const btcInputs=cycle?.inputs||getCycleCache()?.vals||{};
   const opportunities=rankedOpportunities().slice(0,5).map(o=>({ticker:o.ticker,score:o.score,drop:o.drop,reason:o.reason,action:opportunityActionFor(o).label,setup:o.setup}));
+  const watchlistScores=watchlistRows().map(item=>{
+    const s=watchlistScore(item);
+    return {ticker:item.ticker,name:item.name,score:s.score,action:s.action.label,price:s.price,move:s.move,quality:s.quality,thesis:s.thesis,valuation:s.valuation,macro:s.macro,opportunity:s.opportunity,confidence:s.confidence,source:item.source||'Watchlist'};
+  }).sort((a,b)=>b.score-a.score).slice(0,10);
   const research=window._currentResearch?{ticker:window._currentResearch.ticker,score:window._currentResearch.score,decision:window._currentResearch.decision?.label,price:window._currentResearch.price||null}:null;
   const headlines=[...document.querySelectorAll('#live-news-list .news-title')].slice(0,6).map(el=>el.textContent.trim()).filter(Boolean);
   return {
@@ -2405,6 +2485,7 @@ function collectSnapshot(){
     notes,
     btc:{score:cycle?.score??null,label:cycle?.label||null,price:window._btcPrice||getCycleCache()?.btcPrice||null,inputs:btcInputs},
     opportunities,
+    watchlistScores,
     research,
     portfolio:collectPortfolioSnapshot(),
     headlines
@@ -2460,6 +2541,25 @@ async function saveDailySnapshot(){
   }catch(e){
     if(status)status.textContent=`Saved locally. Airtable save failed: ${e.message}`;
   }
+}
+function localDateKey(){
+  return new Date().toLocaleDateString('en-CA');
+}
+async function autoSaveDailySnapshot(){
+  const today=localDateKey();
+  if(localStorage.getItem(AUTO_MEMORY_SNAPSHOT_KEY)===today)return;
+  const snap=collectSnapshot();
+  snap.autoSaved=true;
+  snap.notes=snap.notes||'Automatic daily app-open snapshot.';
+  const rows=memorySnapshots();
+  if(rows.some(s=>String(s.createdAt||'').slice(0,10)===today&&s.autoSaved)) {
+    localStorage.setItem(AUTO_MEMORY_SNAPSHOT_KEY,today);
+    return;
+  }
+  rows.unshift(snap);
+  saveMemorySnapshots(rows);
+  localStorage.setItem(AUTO_MEMORY_SNAPSHOT_KEY,today);
+  try{await saveSnapshotToAirtable(snap);}catch(e){}
 }
 function renderMemorySnapshots(){
   const el=document.getElementById('memory-list');
@@ -2680,6 +2780,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(loading)loading.style.display='none';
     if(content){content.style.display='block';content.innerHTML='<div class="card"><p class="section-label">DAILY BRIEF</p><p style="font-size:12px;color:#5a5d8a;line-height:1.7;">Brief could not load. Check the browser console or API connection.</p></div>';}
   }
+  setTimeout(()=>{try{autoSaveDailySnapshot();}catch(e){}},15000);
 });
 </script>
 </body>
