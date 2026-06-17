@@ -552,6 +552,8 @@ td strong{color:#c8caee;font-weight:500;}
     <textarea class="textarea-input" id="memory-notes" placeholder="What happened today? Example: BTC rate-limit issue, AI capex selloff, regulatory fear, portfolio rebalance idea..."></textarea>
     <div class="research-actions">
       <button class="btn" onclick="saveDailySnapshot()">Save Daily Snapshot</button>
+      <button class="btn" onclick="setupAirtableMemory()">Setup Airtable</button>
+      <button class="btn" onclick="loadAirtableSnapshots()">Load Airtable Snapshots</button>
     </div>
     <div class="status" id="memory-status"></div>
   </div>
@@ -2408,13 +2410,56 @@ function collectSnapshot(){
     headlines
   };
 }
-function saveDailySnapshot(){
+async function setupAirtableMemory(){
+  const status=document.getElementById('memory-status');
+  if(status)status.textContent='Setting up Airtable schema...';
+  try{
+    const r=await fetch('/api/airtable/setup',{method:'POST'});
+    const d=await r.json();
+    if(!r.ok||!d.ok)throw new Error(d.error||'Airtable setup failed');
+    if(status)status.textContent=`Airtable ready. ${d.results?.length||0} tables checked/created.`;
+  }catch(e){
+    if(status)status.textContent='Airtable setup failed: '+e.message;
+  }
+}
+async function saveSnapshotToAirtable(snap){
+  const r=await fetch('/api/airtable/save-snapshot',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({snapshot:snap})
+  });
+  const d=await r.json();
+  if(!r.ok||!d.ok)throw new Error(d.error||'Airtable save failed');
+  return d;
+}
+async function loadAirtableSnapshots(){
+  const status=document.getElementById('memory-status');
+  if(status)status.textContent='Loading Airtable snapshots...';
+  try{
+    const r=await fetch('/api/airtable/list-snapshots?ts='+Date.now());
+    const d=await r.json();
+    if(!r.ok||!d.ok)throw new Error(d.error||'Airtable load failed');
+    const remote=(d.records||[]).map(r=>r.snapshot).filter(Boolean);
+    const merged=[...remote,...memorySnapshots()].filter((snap,idx,arr)=>arr.findIndex(x=>x.id===snap.id)===idx);
+    saveMemorySnapshots(merged);
+    if(status)status.textContent=`Loaded ${remote.length} Airtable snapshots.`;
+  }catch(e){
+    if(status)status.textContent='Airtable load failed: '+e.message;
+  }
+}
+async function saveDailySnapshot(){
   const snap=collectSnapshot();
   const rows=memorySnapshots();
   rows.unshift(snap);
   saveMemorySnapshots(rows);
   const status=document.getElementById('memory-status');
-  if(status)status.textContent=`Saved snapshot for ${new Date(snap.createdAt).toLocaleString()} · ${snap.eventType}.`;
+  if(status)status.textContent=`Saved locally for ${new Date(snap.createdAt).toLocaleString()} · ${snap.eventType}. Saving to Airtable...`;
+  try{
+    await saveSnapshotToAirtable(snap);
+    if(status)status.textContent=`Saved locally and to Airtable for ${new Date(snap.createdAt).toLocaleString()} · ${snap.eventType}.`;
+  }catch(e){
+    if(status)status.textContent=`Saved locally. Airtable save failed: ${e.message}`;
+  }
 }
 function renderMemorySnapshots(){
   const el=document.getElementById('memory-list');
