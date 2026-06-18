@@ -128,6 +128,12 @@ td strong{color:#c8caee;font-weight:500;}
 .research-score-num{font-family:'Bebas Neue',sans-serif;font-size:38px;line-height:0.95;}
 .research-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
 .textarea-input{width:100%;min-height:74px;resize:vertical;padding:10px;background:#07080f;border:1px solid #2a2d50;border-radius:8px;color:#c8caee;font-family:'DM Mono',monospace;font-size:12px;line-height:1.55;outline:none;}
+.health-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;}
+.health-item{background:#07080f;border:1px solid #1a1c30;border-radius:8px;padding:10px;}
+.health-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:6px;}
+.health-title{font-size:10px;color:#7a7daa;letter-spacing:.12em;text-transform:uppercase;}
+.health-pill{font-size:9px;letter-spacing:.12em;text-transform:uppercase;border:1px solid currentColor;border-radius:999px;padding:3px 6px;white-space:nowrap;}
+.health-body{font-size:11px;color:#5a5d8a;line-height:1.55;}
 
 </style>
 </head>
@@ -153,6 +159,17 @@ td strong{color:#c8caee;font-weight:500;}
       <p style="font-size:11px;color:#3a3d6a;" id="brief-date"></p>
     </div>
     <button class="btn" id="brief-refresh-btn" onclick="loadBrief()">↻ Refresh Brief</button>
+  </div>
+  <div class="card" id="data-health-card">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <div>
+        <p class="section-label">DATA HEALTH</p>
+        <p style="font-size:11px;color:#3a3d6a;">Shows live, cached, stale, failed, or not configured data feeds.</p>
+      </div>
+      <button class="btn" onclick="refreshAllLiveData()">↻ Refresh All Live Data</button>
+    </div>
+    <div id="data-health-list" class="health-grid"></div>
+    <div class="status" id="data-health-status"></div>
   </div>
   <div id="brief-loading" style="text-align:center;padding:40px 0;">
     <p style="font-size:12px;color:#3a3d6a;letter-spacing:0.15em;">LOADING BRIEF...</p>
@@ -349,7 +366,7 @@ td strong{color:#c8caee;font-weight:500;}
       <p class="section-label">WATCHLIST</p>
       <p style="font-size:11px;color:#3a3d6a;">Best home for the next dollar · ranked by pull-the-trigger score</p>
     </div>
-    <button class="btn" onclick="renderWatchlist()">↻ Refresh Scores</button>
+    <button class="btn" onclick="refreshWatchlistScores()">↻ Refresh Scores</button>
   </div>
 
   <div class="card">
@@ -559,6 +576,25 @@ td strong{color:#c8caee;font-weight:500;}
   </div>
 
   <div class="card">
+    <p class="section-label">HISTORICAL BACKFILL</p>
+    <p style="font-size:11px;color:#3a3d6a;line-height:1.6;">Backfills BTC price, Fear & Greed, 200-week MA estimate, market regime, and optional watchlist price history. BGeometrics on-chain fields stay blank unless separately backfilled.</p>
+    <div class="form-grid">
+      <select class="small-input" id="backfill-days">
+        <option value="365">1 year</option>
+        <option value="730">2 years</option>
+        <option value="1460">4 years</option>
+      </select>
+      <input class="small-input" id="backfill-tickers" placeholder="Optional tickers, or leave blank for current watchlist">
+    </div>
+    <div class="research-actions">
+      <button class="btn" onclick="backfillHistoryMemory(false)">Backfill Local Memory</button>
+      <button class="btn" onclick="backfillHistoryMemory(true)">Backfill Airtable</button>
+      <button class="btn" onclick="downloadHistoricalBackfill()">Download JSON</button>
+    </div>
+    <div class="status" id="backfill-status"></div>
+  </div>
+
+  <div class="card">
     <p class="section-label">SNAPSHOT HISTORY</p>
     <div id="memory-list" class="explain-body">No snapshots saved yet.</div>
   </div>
@@ -645,6 +681,7 @@ function applyCycleCache(cache=getCycleCache()){
       rd.textContent='NUPL-implied realized price $'+Math.round(realized).toLocaleString();
     }
   }else if(rd&&cache.realizedProxy)rd.textContent='NUPL-implied realized price $'+Math.round(cache.realizedProxy).toLocaleString();
+  renderDataHealth();
   return true;
 }
 function currentScheduleAnchor(){
@@ -656,9 +693,12 @@ function currentScheduleAnchor(){
   return Date.UTC(y.getUTCFullYear(),y.getUTCMonth(),y.getUTCDate(),20+8,0,0);
 }
 function cacheIsFreshForWindow(cache=getCycleCache()){return !!(cache&&cache.updatedAt&&cache.updatedAt>=currentScheduleAnchor());}
+function cacheHasCycleData(cache=getCycleCache()){
+  return !!(cache&&cache.vals&&bgMetricCount(sanitizedCycleVals(cache.vals))>=2);
+}
 async function smartRefreshCycle(force=false){
   const cache=getCycleCache();
-  if(!force&&cacheIsFreshForWindow(cache)){
+  if(!force&&cacheIsFreshForWindow(cache)&&cacheHasCycleData(cache)){
     applyCycleCache(cache);
     if(needsFreeBtcIndicators(cache.vals)){
       updateQuotaDisplay('using BG cache; filling free BTC metrics');
@@ -807,7 +847,7 @@ function switchTab(t){
 }
 
 async function bgCall(ep){
-  const r=await fetch(`/api/bgeometrics?endpoint=${encodeURIComponent(ep)}`);
+  const r=await fetch(`/api/bgeometrics?endpoint=${encodeURIComponent(ep)}&limit=100`);
   if(r.status!==404)addBgUsage(1);
   if(!r.ok){
     let msg='BG proxy '+r.status, details=null;
@@ -877,6 +917,12 @@ function normalizeBtcHistoryPayload(source,d){
   if(source==='coingecko'){
     rows=Array.isArray(d?.prices)?d.prices:[];
   }
+  if(source==='yahoo'){
+    const result=d?.chart?.result?.[0];
+    const timestamps=result?.timestamp||[];
+    const closes=result?.indicators?.adjclose?.[0]?.adjclose||result?.indicators?.quote?.[0]?.close||[];
+    rows=timestamps.map((t,i)=>[Number(t)*1000,Number(closes[i])]);
+  }
   if(source==='cryptocompare'){
     rows=(d?.Data?.Data||[]).map(r=>[Number(r.time)*1000,Number(r.close)]).filter(r=>Number.isFinite(r[0])&&Number.isFinite(r[1]));
   }
@@ -888,9 +934,10 @@ function normalizeBtcHistoryPayload(source,d){
 function btcHistorySources(){
   const cgProxy={source:'coingecko',url:'/api/coingecko?path=coins%2Fbitcoin%2Fmarket_chart&vs_currency=usd&days=1500&interval=daily'};
   const cgDirect={source:'coingecko',url:'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1500&interval=daily'};
+  const yahoo={source:'yahoo',url:'https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?range=5y&interval=1d'};
   const cryptoCompare={source:'cryptocompare',url:'https://min-api.cryptocompare.com/data/v2/histoday?fsym=BTC&tsym=USD&limit=1500'};
   const coinCap={source:'coincap',url:'https://api.coincap.io/v2/assets/bitcoin/history?interval=d1'};
-  return location.protocol==='file:' ? [cgDirect,cryptoCompare,coinCap] : [cgProxy,cgDirect,cryptoCompare,coinCap];
+  return location.protocol==='file:' ? [cgDirect,yahoo,cryptoCompare,coinCap] : [cgProxy,cgDirect,yahoo,cryptoCompare,coinCap];
 }
 async function fetchBtcHistory(){
   const failures=[];
@@ -983,6 +1030,7 @@ async function refreshFreeBtcIndicators(vals,{cacheSource='free-btc-metrics'}={}
         const realized=chooseRealizedPremium(next,btcPrice);
         if(Number.isFinite(realized.rvp))next.rvp=realized.rvp;
         window._advancedCycle=buildAdvancedCycleFromPrices(prices);
+        window._btcPriceHistoryStatus='LIVE';
         const pd=document.getElementById('price-display');
         if(pd&&Number.isFinite(btcPrice))pd.textContent='BTC $'+btcPrice.toLocaleString(undefined,{maximumFractionDigits:0});
         const rd=document.getElementById('realized-display');
@@ -993,6 +1041,7 @@ async function refreshFreeBtcIndicators(vals,{cacheSource='free-btc-metrics'}={}
         renderCards(next);renderAdvancedCycleSignals(window._advancedCycle);updateGauge(next);
         setStatus(`Free BTC metrics updated from ${history.source} `+new Date().toLocaleTimeString());
       }catch(e){
+        window._btcPriceHistoryStatus='FAILED';
         setStatus('BTC price-history unavailable. Realized / 200W MA still need a price-history source.');
         console.warn('[BTC Score] price-history fetch failed:', e);
       }
@@ -1151,6 +1200,7 @@ async function refreshAll(){
     console.error('[BTC Score] BGeometrics issues:', bgErrors);
     showBgError(bgErrors[0]);
   }
+  renderDataHealth();
 }
 
 async function startFetch(){
@@ -1198,6 +1248,125 @@ function renderBriefWatchlistMini(){
   const rows=watchlistRows().map(item=>({item,score:watchlistScore(item)})).sort((a,b)=>b.score.score-a.score.score).slice(0,4);
   if(!rows.length)return '<div class="brief-empty">No watchlist items yet. Add names from Opportunities, Emerging Leaders, or Research.</div>';
   return rows.map(({item,score})=>`<div class="metric-row"><span><strong>${esc(item.ticker)}</strong> ${sectorHtml(item.category||'Watchlist')}</span><strong style="color:${score.action.color};">${score.score} · ${esc(score.action.label)}</strong></div>`).join('');
+}
+function healthColor(status){
+  return status==='LIVE'?'#1D9E75':status==='CACHED'?'#639922':status==='STALE'?'#BA7517':status==='FAILED'?'#E24B4A':'#3a3d6a';
+}
+function ageText(ts){
+  if(!ts)return 'never';
+  const ms=Date.now()-Number(ts);
+  if(!Number.isFinite(ms)||ms<0)return 'unknown';
+  const mins=Math.round(ms/60000);
+  if(mins<1)return 'just now';
+  if(mins<60)return `${mins}m ago`;
+  const hrs=Math.round(mins/60);
+  if(hrs<48)return `${hrs}h ago`;
+  return `${Math.round(hrs/24)}d ago`;
+}
+function dataHealthRows(){
+  const cache=getCycleCache();
+  const vals=sanitizedCycleVals(cache?.vals||window._cycleScore?.inputs||{});
+  const bgLoaded=bgMetricCount(vals);
+  const btcFresh=cacheIsFreshForWindow(cache)&&cacheHasCycleData(cache);
+  const btcStatus=window._cycleScore?'LIVE':btcFresh?'CACHED':cache?.updatedAt?'STALE':'WAITING';
+  const priceStatus=Number.isFinite(vals.ma)?(cache?.updatedAt?'LIVE':'CACHED'):(window._btcPriceHistoryStatus||'WAITING');
+  const newsStatus=window._newsStatus||'WAITING';
+  const screenerStatus=window._screenerUpdatedAt?'LIVE':'WAITING';
+  const memoryRows=memorySnapshots();
+  const airtable=window._airtableHealth||{status:'WAITING',detail:'Airtable not checked this session.'};
+  return [
+    {
+      title:'BTC Score',
+      status:bgLoaded>=2?btcStatus:'STALE',
+      body:`${bgLoaded}/3 BGeometrics metrics · ${validMetricCount(vals)}/6 total indicators · cache ${ageText(cache?.updatedAt)} · quota ${bgRemaining()} / ${BG_DAILY_LIMIT}`
+    },
+    {
+      title:'BTC Price / 200W MA',
+      status:priceStatus,
+      body:Number.isFinite(vals.ma)?`${fmt('ma',vals.ma)} vs 200W MA · BTC ${window._btcPrice?'$'+Math.round(window._btcPrice).toLocaleString():'price cached'}`:'No price-history value yet. CoinGecko/Yahoo fallback will retry.'
+    },
+    {
+      title:'Live Market Headlines',
+      status:newsStatus,
+      body:window._newsDetail||'Not loaded yet. Daily Brief refresh checks local API, then deployed API.'
+    },
+    {
+      title:'Market Prices / Screener',
+      status:screenerStatus,
+      body:window._screenerUpdatedAt?`Updated ${new Date(window._screenerUpdatedAt).toLocaleTimeString()} · ${Object.keys(window._screenerData||{}).length} symbols loaded`:'No live screener pull yet.'
+    },
+    {
+      title:'Airtable Memory',
+      status:airtable.status,
+      body:airtable.detail||'Airtable not checked this session.'
+    },
+    {
+      title:'Local Memory',
+      status:memoryRows.length?'CACHED':'WAITING',
+      body:`${memoryRows.length} local snapshot${memoryRows.length===1?'':'s'} · newest ${ageText(memoryRows[0]?.createdAt?Date.parse(memoryRows[0].createdAt):null)}`
+    }
+  ];
+}
+function renderDataHealth(message=''){
+  const el=document.getElementById('data-health-list');
+  if(!el)return;
+  el.innerHTML=dataHealthRows().map(row=>{
+    const c=healthColor(row.status);
+    return `<div class="health-item">
+      <div class="health-top">
+        <div class="health-title">${esc(row.title)}</div>
+        <div class="health-pill" style="color:${c};">${esc(row.status)}</div>
+      </div>
+      <div class="health-body">${esc(row.body)}</div>
+    </div>`;
+  }).join('');
+  const status=document.getElementById('data-health-status');
+  if(status)status.textContent=message;
+}
+async function pingAirtableHealth(){
+  try{
+    const r=await fetch('/api/airtable/list-snapshots?ts='+Date.now());
+    const d=await r.json();
+    if(!r.ok||!d.ok)throw new Error(d.error||'Airtable unavailable');
+    window._airtableHealth={status:'LIVE',detail:`Connected · ${d.records?.length||0} recent records available`};
+  }catch(e){
+    window._airtableHealth={status:'FAILED',detail:e.message||'Airtable check failed'};
+  }
+  renderDataHealth();
+}
+async function refreshNewsHealthOnly(){
+  const urls=['/api/news?ts='+Date.now()];
+  if(location.protocol==='file:'||/^(127\.0\.0\.1|localhost)$/.test(location.hostname))urls.push('https://btcscore.vercel.app/api/news?ts='+Date.now());
+  const failures=[];
+  for(const url of urls){
+    try{
+      const r=await fetch(url);
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const d=await r.json();
+      const count=(d.items||[]).length;
+      window._newsStatus=count?'LIVE':'STALE';
+      window._newsDetail=`${count} headlines · ${url.startsWith('https://')?'deployed API':'local API'} · ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()}`;
+      renderDataHealth();
+      return d;
+    }catch(e){failures.push(`${url}: ${e.message}`);}
+  }
+  window._newsStatus='FAILED';
+  window._newsDetail=failures.join(' · ');
+  renderDataHealth();
+  throw new Error(window._newsDetail);
+}
+async function refreshAllLiveData(){
+  const status=document.getElementById('data-health-status');
+  if(status)status.textContent='Refreshing BTC score, market prices, headlines, and Airtable status...';
+  renderDataHealth('Refreshing live data...');
+  const results=await Promise.allSettled([
+    smartRefreshCycle(false),
+    loadScreener(),
+    refreshNewsHealthOnly(),
+    pingAirtableHealth()
+  ]);
+  const failed=results.filter(r=>r.status==='rejected').length;
+  renderDataHealth(failed?`Refresh completed with ${failed} issue${failed===1?'':'s'}. See feed cards above.`:'All live data checks completed.');
 }
 function savedWatchlistSet(){
   return new Set(watchlistRows().map(item=>String(item.ticker||'').toUpperCase()));
@@ -1497,10 +1666,25 @@ async function loadBrief(){
 async function loadLiveNews(){
   const box=document.getElementById('live-news-list');
   if(!box)return;
+  const newsUrls=['/api/news?ts='+Date.now()];
+  if(location.protocol==='file:'||/^(127\.0\.0\.1|localhost)$/.test(location.hostname)){
+    newsUrls.push('https://btcscore.vercel.app/api/news?ts='+Date.now());
+  }
+  const failures=[];
   try{
-    const r=await fetch('/api/news?ts='+Date.now());
-    if(!r.ok)throw new Error('news api '+r.status);
-    const d=await r.json();
+    let d=null, usedUrl='';
+    for(const url of newsUrls){
+      try{
+        const r=await fetch(url);
+        if(!r.ok)throw new Error('HTTP '+r.status);
+        d=await r.json();
+        usedUrl=url;
+        break;
+      }catch(err){
+        failures.push(`${url}: ${err.message}`);
+      }
+    }
+    if(!d)throw new Error(failures.join(' · '));
     const buckets=d.buckets||[];
     const items=(d.items||d.news||[]).slice(0,12);
     if(!buckets.length&&!items.length)throw new Error('no items');
@@ -1518,11 +1702,18 @@ async function loadLiveNews(){
         <div class="news-body">${n.source?`${esc(n.source)} · `:''}${esc(n.publishedAt||n.published||'')}${n.summary?` · ${esc(n.summary)}`:''}</div>
       </div>`).join('');
     }
-    box.insertAdjacentHTML('beforeend',`<p class="brief-policy">${esc(d.policy||'24h normal news; 48h major context')} · Updated ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()}</p>`);
+    const sourceLabel=usedUrl.startsWith('https://')?'deployed API':'local API';
+    window._newsStatus='LIVE';
+    window._newsDetail=`${(d.items||[]).length} headlines · ${sourceLabel} · ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()}`;
+    renderDataHealth();
+    box.insertAdjacentHTML('beforeend',`<p class="brief-policy">${esc(d.policy||'24h normal news; 48h major context')} · Updated ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()} · ${sourceLabel}</p>`);
   }catch(e){
+    window._newsStatus='FAILED';
+    window._newsDetail=e.message||'Unknown news error';
+    renderDataHealth();
     box.innerHTML=`<div class="news-item">
       <div class="news-title">Live news route unavailable in this view</div>
-      <div class="news-body">This local static server may not serve /api/news. The deployed Vercel app can use the live route. No stale hardcoded headlines are shown.</div>
+      <div class="news-body">The app tried the local API and, when needed, the deployed Vercel API. No stale hardcoded headlines are shown.<br><span style="color:#6a6d9a;">${esc(e.message||'Unknown news error')}</span></div>
       <p class="brief-policy">Policy remains: last 24 hours for normal news, last 48 hours only for major market-moving context.</p>
     </div>`;
   }
@@ -2152,6 +2343,21 @@ function renderWatchlist(){
     </div>`;
   }).join('');
 }
+async function refreshWatchlistScores(){
+  const status=document.getElementById('watchlist-status');
+  if(status)status.textContent='Refreshing live prices, news, regime, and watchlist scores...';
+  try{
+    await loadScreener();
+    renderWatchlist();
+    const updated=window._screenerUpdatedAt?new Date(window._screenerUpdatedAt).toLocaleTimeString():new Date().toLocaleTimeString();
+    if(status)status.textContent=window._screenerLastError
+      ? `Scores recalculated from cached/local data. Live refresh issue: ${window._screenerLastError}`
+      : `Watchlist scores refreshed ${updated}.`;
+  }catch(e){
+    renderWatchlist();
+    if(status)status.textContent=`Refresh could not reach live data, so scores were recalculated from cached/local data. ${e.message||''}`.trim();
+  }
+}
 function researchProfile(symbol){
   const sym=String(symbol||'').trim().toUpperCase();
   const watch=WATCHLIST.find(x=>x.ticker===sym);
@@ -2599,7 +2805,7 @@ function analyzePortfolio(){
   renderPortfolioIntelligence(allScored,total);
 }
 function memorySnapshots(){try{return JSON.parse(localStorage.getItem(MEMORY_SNAPSHOTS_KEY)||'[]');}catch(e){return [];}}
-function saveMemorySnapshots(rows){localStorage.setItem(MEMORY_SNAPSHOTS_KEY,JSON.stringify(rows.slice(0,200)));renderMemorySnapshots();}
+function saveMemorySnapshots(rows){localStorage.setItem(MEMORY_SNAPSHOTS_KEY,JSON.stringify(rows.slice(0,1600)));renderMemorySnapshots();}
 function collectPortfolioSnapshot(){
   const rows=portfolio();
   const total=rows.reduce((a,r)=>a+holdingValue(r),0);
@@ -2642,10 +2848,13 @@ async function setupAirtableMemory(){
     const r=await fetch('/api/airtable/setup',{method:'POST'});
     const d=await r.json();
     if(!r.ok||!d.ok)throw new Error(d.error||'Airtable setup failed');
+    window._airtableHealth={status:'LIVE',detail:`Schema ready · ${d.results?.length||0} tables checked`};
     if(status)status.textContent=`Airtable ready. ${d.results?.length||0} tables checked/created.`;
   }catch(e){
+    window._airtableHealth={status:'FAILED',detail:e.message};
     if(status)status.textContent='Airtable setup failed: '+e.message;
   }
+  renderDataHealth();
 }
 async function saveSnapshotToAirtable(snap){
   const r=await fetch('/api/airtable/save-snapshot',{
@@ -2655,6 +2864,8 @@ async function saveSnapshotToAirtable(snap){
   });
   const d=await r.json();
   if(!r.ok||!d.ok)throw new Error(d.error||'Airtable save failed');
+  window._airtableHealth={status:'LIVE',detail:`Last save succeeded ${new Date().toLocaleTimeString()}`};
+  renderDataHealth();
   return d;
 }
 async function loadAirtableSnapshots(){
@@ -2667,10 +2878,13 @@ async function loadAirtableSnapshots(){
     const remote=(d.records||[]).map(r=>r.snapshot).filter(Boolean);
     const merged=[...remote,...memorySnapshots()].filter((snap,idx,arr)=>arr.findIndex(x=>x.id===snap.id)===idx);
     saveMemorySnapshots(merged);
+    window._airtableHealth={status:'LIVE',detail:`Loaded ${remote.length} Airtable snapshots ${new Date().toLocaleTimeString()}`};
     if(status)status.textContent=`Loaded ${remote.length} Airtable snapshots.`;
   }catch(e){
+    window._airtableHealth={status:'FAILED',detail:e.message};
     if(status)status.textContent='Airtable load failed: '+e.message;
   }
+  renderDataHealth();
 }
 async function saveDailySnapshot(){
   const snap=collectSnapshot();
@@ -2684,6 +2898,76 @@ async function saveDailySnapshot(){
     if(status)status.textContent=`Saved locally and to Airtable for ${new Date(snap.createdAt).toLocaleString()} · ${snap.eventType}.`;
   }catch(e){
     if(status)status.textContent=`Saved locally. Airtable save failed: ${e.message}`;
+  }
+}
+function backfillTickerList(){
+  const manual=String(document.getElementById('backfill-tickers')?.value||'').split(',').map(t=>cleanSymbol(t)).filter(Boolean);
+  if(manual.length)return [...new Set(manual)].slice(0,25);
+  const fromWatch=watchlistRows().map(r=>cleanSymbol(r.ticker)).filter(Boolean);
+  const fromPortfolio=aggregateHoldings(portfolio()).map(r=>cleanSymbol(r.symbol)).filter(s=>assetClass(s)==='Stock'||assetClass(s)==='ETF / Fund');
+  return [...new Set([...fromWatch,...fromPortfolio])].slice(0,25);
+}
+async function fetchHistoricalBackfill(){
+  const days=Number(document.getElementById('backfill-days')?.value||365)||365;
+  const tickers=backfillTickerList();
+  const r=await fetch('/api/historical-backfill',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({days,tickers})
+  });
+  const d=await r.json();
+  if(!r.ok||!d.ok)throw new Error(d.error||'Historical backfill failed');
+  return d;
+}
+function mergeBackfillSnapshots(snapshots){
+  const merged=[...snapshots,...memorySnapshots()];
+  const unique=merged.filter((snap,idx,arr)=>arr.findIndex(x=>x.id===snap.id)===idx);
+  unique.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  saveMemorySnapshots(unique);
+  return unique;
+}
+async function backfillHistoryMemory(saveAirtable=false){
+  const status=document.getElementById('backfill-status')||document.getElementById('memory-status');
+  const days=Number(document.getElementById('backfill-days')?.value||365)||365;
+  const tickers=backfillTickerList();
+  if(status)status.textContent=`Backfilling ${days} days${tickers.length?` for ${tickers.length} tickers`:''}...`;
+  try{
+    const data=await fetchHistoricalBackfill();
+    mergeBackfillSnapshots(data.snapshots||[]);
+    let msg=`Backfilled ${data.snapshots?.length||0} historical snapshots locally. Sources: BTC price, Fear & Greed, ETF market regime${tickers.length?', watchlist prices':''}.`;
+    if(saveAirtable){
+      if(status)status.textContent=`Saved locally. Writing ${Math.min(days,365)} days to Airtable...`;
+      const r=await fetch('/api/airtable/backfill-history',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({days:Math.min(days,365),tickers})
+      });
+      const d=await r.json();
+      if(!r.ok||!d.ok)throw new Error(d.error||'Airtable backfill failed');
+      msg+=` Airtable wrote ${d.snapshots||0} days across ${d.writes?.length||0} tables.`;
+    }
+    if(status)status.textContent=msg+' BGeometrics on-chain fields were not estimated.';
+  }catch(e){
+    if(status)status.textContent='Backfill failed: '+e.message;
+  }
+}
+async function downloadHistoricalBackfill(){
+  const status=document.getElementById('backfill-status')||document.getElementById('memory-status');
+  if(status)status.textContent='Preparing historical JSON download...';
+  try{
+    const data=await fetchHistoricalBackfill();
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`btc-score-historical-backfill-${data.days||'history'}d.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    if(status)status.textContent=`Downloaded ${data.snapshots?.length||0} historical snapshots.`;
+  }catch(e){
+    if(status)status.textContent='Download failed: '+e.message;
   }
 }
 function localDateKey(){
@@ -2711,10 +2995,12 @@ function renderMemorySnapshots(){
   const filter=document.getElementById('memory-filter')?.value||'all';
   const rows=memorySnapshots().filter(s=>filter==='all'||s.eventType===filter);
   if(!rows.length){el.textContent='No snapshots saved yet.';return;}
-  el.innerHTML=rows.map(s=>{
+  const visible=rows.slice(0,120);
+  el.innerHTML=visible.map(s=>{
     const top=s.opportunities?.[0];
     const p=s.portfolio||{};
     const btcScore=s.btc?.score??'—';
+    const estimate=s.btc?.historicalEstimate?' est.':'';
     const topOpp=top?`${top.ticker} ${top.score} (${top.action})`:'—';
     const research=s.research?`${s.research.ticker} ${s.research.score} (${s.research.decision})`:'—';
     const conc=(p.concentration||[]).length?(p.concentration||[]).map(c=>`${c.symbol} ${c.alloc}%`).join(', '):'none above 10%';
@@ -2722,7 +3008,7 @@ function renderMemorySnapshots(){
       <div class="op-head" onclick="toggleCard(this)">
         <div>
           <div class="op-ticker">${esc(s.eventType)} <span style="font-size:10px;color:#3a3d6a;">${new Date(s.createdAt).toLocaleString()}</span></div>
-          <div class="op-sub">BTC ${btcScore} · Top opportunity ${esc(topOpp)} · Portfolio ${money(p.total||0)}</div>
+          <div class="op-sub">BTC ${btcScore}${estimate} · ${esc(s.marketRegime?.label||'No regime')} · Top opportunity ${esc(topOpp)} · Portfolio ${money(p.total||0)}</div>
         </div>
         <div><div class="op-label" style="color:#7a7daa;">SNAPSHOT</div></div>
       </div>
@@ -2737,7 +3023,7 @@ function renderMemorySnapshots(){
         </div>
       </div>
     </div>`;
-  }).join('');
+  }).join('')+(rows.length>visible.length?`<p class="brief-policy">Showing newest ${visible.length} of ${rows.length} saved snapshots. Historical scoring still uses the full local memory.</p>`:'');
 }
 function clearMemorySnapshots(){if(confirm('Clear all locally saved memory snapshots?'))saveMemorySnapshots([]);}
 function parseCSV(text){
@@ -2844,7 +3130,7 @@ async function showBgDebug(){
       continue;
     }
     try{
-      const r=await fetch(`/api/bgeometrics?endpoint=${encodeURIComponent(ep)}`);
+      const r=await fetch(`/api/bgeometrics?endpoint=${encodeURIComponent(ep)}&limit=100`);
       if(r.status!==404)addBgUsage(1);
       const text=await r.text();
       let parsed;try{parsed=JSON.parse(text);}catch(e){parsed=text;}
@@ -2868,27 +3154,42 @@ async function showBgDebug(){
 window._screenerData = {}; // symbol → {price, changePercent, name, ...}
 window._opportunityNews = {}; // symbol → recent headline context
 let _screenerLoading = false;
+let _screenerPromise = null;
 
 async function loadScreener(){
-  if(_screenerLoading)return;
+  if(_screenerLoading&&_screenerPromise)return _screenerPromise;
   _screenerLoading=true;
   const statusEl=document.getElementById('screener-status');
+  const watchStatus=document.getElementById('watchlist-status');
   if(statusEl)statusEl.textContent='Loading live prices…';
-  try{
+  if(watchStatus&&document.getElementById('tab-watchlist')?.classList.contains('active'))watchStatus.textContent='Loading live prices and news...';
+  _screenerPromise=(async()=>{
     const r=await fetch('/api/screener?ts='+Date.now());
     if(!r.ok)throw new Error('screener '+r.status);
     const d=await r.json();
     (d.quotes||[]).forEach(q=>{ window._screenerData[q.symbol]=q; });
     window._opportunityNews=d.newsBySymbol||{};
     window._screenerUpdatedAt=d.updatedAt||new Date().toISOString();
+    window._screenerLastError='';
     if(statusEl)statusEl.textContent='Prices updated '+new Date(d.updatedAt).toLocaleTimeString();
+    if(watchStatus&&document.getElementById('tab-watchlist')?.classList.contains('active'))watchStatus.textContent='Live market data updated '+new Date(d.updatedAt).toLocaleTimeString();
     renderOpportunities();
     renderEmergingLeaders();
     renderWatchlist();
+    renderDataHealth();
+    return d;
+  })();
+  try{
+    return await _screenerPromise;
   }catch(e){
+    window._screenerLastError=e.message||'Live prices unavailable';
     if(statusEl)statusEl.textContent='Live prices unavailable — using manual estimates';
+    if(watchStatus&&document.getElementById('tab-watchlist')?.classList.contains('active'))watchStatus.textContent='Live prices unavailable — recalculated from cached/local data';
+    renderDataHealth();
+    return null;
   }finally{
     _screenerLoading=false;
+    _screenerPromise=null;
   }
 }
 
@@ -2918,6 +3219,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   try{renderEmergingLeaders();}catch(e){}
   try{renderPortfolio();}catch(e){}
   try{renderMemorySnapshots();}catch(e){}
+  try{renderDataHealth();}catch(e){}
   try{loadBrief();}catch(e){
     const loading=document.getElementById('brief-loading');
     const content=document.getElementById('brief-content');
