@@ -632,6 +632,13 @@ function cacheCycle(vals,meta={}){
   if(Number.isFinite(realizedProxy))window._realizedProxy=realizedProxy;
   localStorage.setItem(BG_CACHE_KEY,JSON.stringify({vals,btcPrice,realizedProxy,advancedCycle:window._advancedCycle||null,updatedAt:Date.now(),...meta}));
 }
+function maybeCacheCycle(vals,meta={}){
+  if(bgMetricCount(sanitizedCycleVals(vals))>=2){
+    cacheCycle(vals,meta);
+    return true;
+  }
+  return false;
+}
 function getCycleCache(){try{return JSON.parse(localStorage.getItem(BG_CACHE_KEY)||'null');}catch(e){return null;}}
 function getBgEndpointCache(){try{return JSON.parse(localStorage.getItem(BG_ENDPOINT_CACHE_KEY)||'{}');}catch(e){return {};}}
 function cacheBgEndpoint(endpoint,payload){
@@ -914,6 +921,9 @@ function buildAdvancedCycleFromPrices(prices){
 }
 function normalizeBtcHistoryPayload(source,d){
   let rows=[];
+  if(source==='btcscore-history'){
+    rows=Array.isArray(d?.prices)?d.prices:[];
+  }
   if(source==='coingecko'){
     rows=Array.isArray(d?.prices)?d.prices:[];
   }
@@ -932,12 +942,16 @@ function normalizeBtcHistoryPayload(source,d){
   return rows.filter(r=>Array.isArray(r)&&Number.isFinite(r[0])&&Number.isFinite(r[1])&&r[1]>0).sort((a,b)=>a[0]-b[0]);
 }
 function btcHistorySources(){
+  const appProxy={source:'btcscore-history',url:'/api/btc-history?days=1500'};
+  const deployedProxy={source:'btcscore-history',url:'https://btcscore.vercel.app/api/btc-history?days=1500'};
   const cgProxy={source:'coingecko',url:'/api/coingecko?path=coins%2Fbitcoin%2Fmarket_chart&vs_currency=usd&days=1500&interval=daily'};
   const cgDirect={source:'coingecko',url:'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1500&interval=daily'};
   const yahoo={source:'yahoo',url:'https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?range=5y&interval=1d'};
   const cryptoCompare={source:'cryptocompare',url:'https://min-api.cryptocompare.com/data/v2/histoday?fsym=BTC&tsym=USD&limit=1500'};
   const coinCap={source:'coincap',url:'https://api.coincap.io/v2/assets/bitcoin/history?interval=d1'};
-  return location.protocol==='file:' ? [cgDirect,yahoo,cryptoCompare,coinCap] : [cgProxy,cgDirect,yahoo,cryptoCompare,coinCap];
+  return (location.protocol==='file:'||/^(127\.0\.0\.1|localhost)$/.test(location.hostname))
+    ? [appProxy,deployedProxy,cgDirect,yahoo,cryptoCompare,coinCap]
+    : [appProxy,cgProxy,deployedProxy,cgDirect,yahoo,cryptoCompare,coinCap];
 }
 async function fetchBtcHistory(){
   const failures=[];
@@ -1050,7 +1064,7 @@ async function refreshFreeBtcIndicators(vals,{cacheSource='free-btc-metrics'}={}
   await Promise.all([fng,cg]);
   Object.assign(vals,next);
   renderCards(next);renderAdvancedCycleSignals(window._advancedCycle);updateGauge(next);
-  cacheCycle(next,{source:cacheSource});
+  maybeCacheCycle(next,{source:cacheSource});
   if(Number.isFinite(next.rvp)&&Number.isFinite(next.ma))setStatus('Free BTC metrics updated '+new Date().toLocaleTimeString());
   return next;
 }
@@ -1125,7 +1139,7 @@ function hydrateScoreFromCachedBg(){
   });
   renderCards(vals);
   updateGauge(vals);
-  cacheCycle(vals,{source:'cached-bg-debug'});
+  maybeCacheCycle(vals,{source:'cached-bg-debug'});
   const upd=document.getElementById('updated-display');
   if(upd)upd.textContent='Updated from BG debug cache '+new Date().toLocaleTimeString();
   refreshFreeBtcIndicators(vals,{cacheSource:'cached-bg-debug-free-fill'}).catch(()=>{});
@@ -1193,9 +1207,10 @@ async function refreshAll(){
     }
   }
   updateGauge(vals);
-  cacheCycle(vals,{source:'live'});
+  maybeCacheCycle(vals,{source:'live'});
   document.getElementById('updated-display').textContent='Updated '+new Date().toLocaleTimeString();
   updateQuotaDisplay('next scheduled refresh: 8 AM / 8 PM PT');
+  window._bgLastError=bgErrors[0]||'';
   if(bgErrors.length){
     console.error('[BTC Score] BGeometrics issues:', bgErrors);
     showBgError(bgErrors[0]);
@@ -1269,6 +1284,8 @@ function dataHealthRows(){
   const bgLoaded=bgMetricCount(vals);
   const btcFresh=cacheIsFreshForWindow(cache)&&cacheHasCycleData(cache);
   const btcStatus=window._cycleScore?'LIVE':btcFresh?'CACHED':cache?.updatedAt?'STALE':'WAITING';
+  const cacheSummary=cacheHasCycleData(cache)?`cache ${ageText(cache?.updatedAt)}`:cache?.updatedAt?`invalid partial cache ${ageText(cache.updatedAt)}`:'no cycle cache';
+  const bgError=window._bgLastError?` · Last BG issue: ${window._bgLastError}`:'';
   const priceStatus=Number.isFinite(vals.ma)?(cache?.updatedAt?'LIVE':'CACHED'):(window._btcPriceHistoryStatus||'WAITING');
   const newsStatus=window._newsStatus||'WAITING';
   const screenerStatus=window._screenerUpdatedAt?'LIVE':'WAITING';
@@ -1278,7 +1295,7 @@ function dataHealthRows(){
     {
       title:'BTC Score',
       status:bgLoaded>=2?btcStatus:'STALE',
-      body:`${bgLoaded}/3 BGeometrics metrics · ${validMetricCount(vals)}/6 total indicators · cache ${ageText(cache?.updatedAt)} · quota ${bgRemaining()} / ${BG_DAILY_LIMIT}`
+      body:`${bgLoaded}/3 BGeometrics metrics · ${validMetricCount(vals)}/6 total indicators · ${cacheSummary} · quota ${bgRemaining()} / ${BG_DAILY_LIMIT}${bgError}`
     },
     {
       title:'BTC Price / 200W MA',
@@ -1481,15 +1498,18 @@ function widerMarketCandidateScore(c){
   const rawValuation=clamp(c.valuation+(Number.isFinite(move)&&move<0?Math.min(14,Math.abs(move)*1.8):0));
   const valuationGuard=valuationGuardrailFor(c.ticker,c.category,rawValuation,move);
   const valuation=valuationGuard.score;
+  const entry=entryQualityScore(move,valuation,c.quality);
+  const entryRead=entryQualityRead(move,entry);
   const thesisPenalty=news?.thesisRisk==='thesis-breaking'?32:news?.thesisRisk==='verify'?8:0;
   const liveBonus=news?4:0;
   const score=Math.round(clamp(
     c.quality*0.21+
     c.thesis*0.20+
-    valuation*0.17+
+    valuation*0.13+
     c.macro*0.13+
     c.confidence*0.11+
     technical*0.11+
+    entry*0.08+
     outcomes.score*0.04+
     history.score*0.03+
     liveBonus-
@@ -1498,11 +1518,12 @@ function widerMarketCandidateScore(c){
     portfolio.adjustment
   ));
   let action={label:'WATCH ONLY',color:'#BA7517',copy:'Good business, but not enough edge yet.'};
-  if(score>=84&&Number.isFinite(move)&&move<=-4&&valuation>=66&&c.confidence>=62)action={label:'RARE SETUP REVIEW',color:'#1D9E75',copy:'Quality, thesis, valuation relief, and price action line up. Verify current news before buying.'};
-  else if(score>=76)action={label:'HIGH-PRIORITY REVIEW',color:'#639922',copy:'Strong candidate to research now; could deserve a watchlist slot.'};
+  if(score>=84&&Number.isFinite(move)&&move<=-4&&valuation>=66&&entry>=68&&c.confidence>=62)action={label:'RARE SETUP REVIEW',color:'#1D9E75',copy:'Quality, thesis, valuation relief, and price action line up. Verify current news before buying.'};
+  else if(score>=76&&entry>=52)action={label:'HIGH-PRIORITY REVIEW',color:'#639922',copy:'Strong candidate to research now; could deserve a watchlist slot.'};
   else if(score>=68)action={label:'ADD TO WATCHLIST',color:'#BA7517',copy:'Worth tracking, but wait for a better price or stronger confirmation.'};
   else if(score<58)action={label:'SKIP',color:'#E24B4A',copy:'Not compelling enough for the watchlist today.'};
-  return {score,action,price,move,valuation,technical,history,outcomes,news,regime,portfolio,valuationGuard};
+  if(entry<45&&score>=70)action={label:'WATCH ONLY',color:'#BA7517',copy:'High-quality candidate, but the current entry looks stretched.'};
+  return {score,action,price,move,valuation,entry,entryRead,technical,history,outcomes,news,regime,portfolio,valuationGuard};
 }
 function watchlistRecommendations(){
   const saved=savedWatchlistSet();
@@ -1823,6 +1844,31 @@ function moveHtml(n){
   const m=moveDirection(n);
   return `<span class="${m.cls}">${m.label} ${m.display}</span>`;
 }
+function downsidePct(move){
+  const v=Number(move);
+  return Number.isFinite(v)&&v<0?Math.abs(v):0;
+}
+function upsidePct(move){
+  const v=Number(move);
+  return Number.isFinite(v)&&v>0?v:0;
+}
+function entryQualityScore(move,valuation=50,quality=60){
+  const v=Number(move);
+  const val=Number(valuation)||50;
+  const q=Number(quality)||60;
+  if(!Number.isFinite(v))return Math.round(clamp(42+(val-50)*0.35+(q-70)*0.08));
+  if(v<0)return Math.round(clamp(48+Math.min(34,Math.abs(v)*4.6)+(val-50)*0.25+(q-70)*0.06));
+  if(v>0)return Math.round(clamp(48-Math.min(30,v*2.5)+(val-50)*0.15+(q-70)*0.04));
+  return Math.round(clamp(48+(val-50)*0.2));
+}
+function entryQualityRead(move,score){
+  const v=Number(move);
+  if(Number.isFinite(v)&&v>4)return {label:'Entry extended',color:'#E24B4A',copy:'Great business may be running ahead of the entry price.'};
+  if(score>=78)return {label:'Entry reset',color:'#1D9E75',copy:'Price weakness is large enough to deserve active research.'};
+  if(score>=64)return {label:'Entry improving',color:'#639922',copy:'Some valuation relief, but still verify the reason for the move.'};
+  if(score>=48)return {label:'Entry neutral',color:'#BA7517',copy:'No obvious bargain yet.'};
+  return {label:'Entry stretched',color:'#E24B4A',copy:'Do not treat this as a fresh opportunity without a pullback.'};
+}
 function actionFor(score,thesis,confidence){
   if(thesis<50)return {label:'TOO RISKY',color:'#A32D2D'};
   if(score>=80&&confidence>=65)return {label:'BUY',color:'#1D9E75'};
@@ -1860,7 +1906,10 @@ function macroScoreForOpportunity(item){
   return clamp(defaults.macro??(typeof p.macro==='number'?p.macro:emerging?.narrative??60));
 }
 function selloffScore(drop){
-  const d=Math.abs(Number(drop)||0);
+  const move=Number(drop);
+  if(!Number.isFinite(move))return 25;
+  if(move>=0)return move>=5?12:22;
+  const d=Math.abs(move);
   if(d>=12)return 95;
   if(d>=8)return 88;
   if(d>=5)return 78;
@@ -1870,8 +1919,10 @@ function selloffScore(drop){
 }
 function valuationImprovementScore(item){
   const base=valuationBaseFor(item);
-  const d=Math.max(0,Math.abs(Number(item.drop)||0));
-  return clamp(base + Math.min(24,d*4));
+  const move=Number(item.drop);
+  if(!Number.isFinite(move))return clamp(base);
+  if(move<0)return clamp(base + Math.min(24,Math.abs(move)*4));
+  return clamp(base - Math.min(18,move*1.3));
 }
 function opportunitySetup(item){
   const risk=headlineRisk(item.reason||item.liveNews?.title||'');
@@ -1880,28 +1931,31 @@ function opportunitySetup(item){
   const thesisIntact=clamp((thesisBase*0.72)+(risk.score*0.28));
   const valuation=valuationImprovementScore(item);
   const selloff=selloffScore(item.drop);
+  const entry=entryQualityScore(item.drop,valuation,quality);
+  const entryRead=entryQualityRead(item.drop,entry);
   const newsQuality=item.liveNews?clamp(74-(item.newsSeverity||40)*0.18):48;
   const macro=macroScoreForOpportunity(item);
-  const confidence=clamp(item.confidence + (item.liveNews?8:-8) + (Math.abs(Number(item.drop)||0)>=5?5:0) - (risk.temporary?0:8));
+  const confidence=clamp(item.confidence + (item.liveNews?8:-10) + (downsidePct(item.drop)>=5?5:0) - (upsidePct(item.drop)>=4?6:0) - (risk.temporary?0:8));
   const raw=Math.round(
     quality*0.20 +
     thesisIntact*0.20 +
-    valuation*0.18 +
-    selloff*0.17 +
+    valuation*0.14 +
+    selloff*0.14 +
+    entry*0.09 +
     newsQuality*0.10 +
     macro*0.08 +
     confidence*0.07
   );
   const thesisBreak=thesisIntact<55||risk.level==='Thesis-breaking risk';
-  const score=thesisBreak?Math.min(raw,49):raw;
-  const valuationImproved=valuation>=65;
+  const score=thesisBreak?Math.min(raw,49):(!item.liveNews?Math.min(raw,74):raw);
+  const valuationImproved=Number(item.drop)<0&&valuation>=60;
   const downEnough=Number(item.drop)<=-5;
-  return {score,quality,thesisIntact,valuation,selloff,newsQuality,macro,confidence,risk,valuationImproved,downEnough,raw};
+  return {score,quality,thesisIntact,valuation,selloff,entry,entryRead,newsQuality,macro,confidence,risk,valuationImproved,downEnough,raw,hasLiveNews:!!item.liveNews};
 }
 function opportunityActionFor(item){
   const s=item.setup||opportunitySetup(item);
   if(s.risk.level==='Thesis-breaking risk'||s.thesisIntact<55)return {label:'AVOID',color:'#A32D2D',copy:'Bad news may impair the thesis. Do not treat this as a simple sale.'};
-  if(s.score>=78&&s.confidence>=62&&s.downEnough&&s.valuationImproved)return {label:'BUY',color:'#1D9E75',copy:'Quality business, meaningful selloff, valuation improved, and thesis appears intact.'};
+  if(s.score>=78&&s.confidence>=62&&s.downEnough&&s.valuationImproved&&s.entry>=68&&s.hasLiveNews)return {label:'BUY',color:'#1D9E75',copy:'Quality business, meaningful selloff, valuation improved, and thesis appears intact.'};
   if(s.score>=64)return {label:'WATCH',color:'#BA7517',copy:'Interesting setup, but wait for better price, stronger news confirmation, or cleaner thesis evidence.'};
   if(s.score>=50)return {label:'AVOID',color:'#E24B4A',copy:'Not enough edge yet. Either the selloff is too small, valuation has not improved enough, or confidence is weak.'};
   return {label:'TOO RISKY',color:'#A32D2D',copy:'Setup quality is too weak for new capital.'};
@@ -1957,7 +2011,7 @@ function renderOpportunities(){
     const newsMeta=item.liveNews?`${item.liveNews.source||'News'}${Number.isFinite(item.liveNews.ageHours)?' · '+item.liveNews.ageHours.toFixed(1)+'h old':''}${item.liveNews.thesisRisk?' · '+item.liveNews.thesisRisk:''}`:'Placeholder context — waiting for a live down-5% news trigger.';
     const chips=[
       moveHtml(item.drop),
-      esc(setup.valuationImproved?'Valuation improved':'Entry not improved enough'),
+      `<span style="color:${setup.entryRead.color};">${esc(setup.entryRead.label)}</span>`,
       esc(setup.risk.level),
       esc(item.liveNews?'Live news linked':'Needs live news')
     ];
@@ -1977,7 +2031,7 @@ function renderOpportunities(){
         <div class="detail-grid">
           <div class="detail-box"><div class="detail-label">WHY IS IT DOWN?</div><div class="detail-text">${item.reason}<br><span style="color:#6a6d9a;">${newsMeta}</span></div></div>
           <div class="detail-box"><div class="detail-label">THESIS INTEGRITY</div><div class="detail-text">${Math.round(setup.thesisIntact)}/100 · ${setup.risk.level}. ${setup.thesisIntact>=75?'Thesis appears intact.':setup.thesisIntact>=55?'Some risk; verify before sizing up.':'Potential impairment; avoid or keep small.'}</div></div>
-          <div class="detail-box"><div class="detail-label">VALUATION IMPROVED?</div><div class="detail-text">${Math.round(setup.valuation)}/100 · ${setup.valuationImproved?'The selloff likely improved the entry price.':'The entry price has not improved enough yet.'} Base valuation score ${valuationBaseFor(item)}/100.</div></div>
+          <div class="detail-box"><div class="detail-label">ENTRY QUALITY</div><div class="detail-text"><span style="color:${setup.entryRead.color};">${Math.round(setup.entry)}/100 · ${esc(setup.entryRead.label)}</span>. ${esc(setup.entryRead.copy)} Valuation ${Math.round(setup.valuation)}/100 · base valuation ${valuationBaseFor(item)}/100.</div></div>
           <div class="detail-box"><div class="detail-label">SETUP QUALITY</div><div class="detail-text">Quality ${Math.round(setup.quality)} · Selloff ${Math.round(setup.selloff)} · News ${Math.round(setup.newsQuality)} · Macro ${Math.round(setup.macro)} · Confidence ${Math.round(setup.confidence)}.</div></div>
           <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text"><span style="color:${a.color};">${a.label}</span> · ${a.copy}</div></div>
         </div>
@@ -2015,12 +2069,16 @@ function renderEmergingLeaders(){
   }
   el.innerHTML=rows.map(item=>{
     const a=emergingAction(item);
+    const move=liveChangeFor(item.ticker);
+    const valuation=valuationGuardrailFor(item.ticker,item.theme,52,move).score;
+    const entry=entryQualityScore(move,valuation,item.revenue);
+    const entryRead=entryQualityRead(move,entry);
     const retailNote=item.retail>=80?'Retail sentiment is hot; require better entry discipline.':item.retail<=45?'Retail attention is low; could be early if fundamentals are improving.':'Retail sentiment is present but not overheated.';
     return `<div class="op-card">
       <div class="op-head" onclick="toggleCard(this)">
         <div>
           <div class="op-ticker">${item.ticker} <span style="font-size:10px;color:#3a3d6a;">${item.name}</span></div>
-          <div class="op-sub">${item.theme}</div>
+          <div class="op-sub">${item.theme}${Number.isFinite(move)?` · ${moveHtml(move)}`:''} · <span style="color:${entryRead.color};">${entryRead.label}</span></div>
         </div>
         <div>
           <div class="op-score" style="color:${a.color};">${item.leader}</div>
@@ -2030,7 +2088,7 @@ function renderEmergingLeaders(){
       <div class="op-details">
         <div class="detail-grid">
           <div class="detail-box"><div class="detail-label">WHY IT'S EMERGING</div><div class="detail-text">Narrative strength ${item.narrative}/100 · Revenue acceleration ${item.revenue}/100 · Guidance/estimate revision signal ${item.guidance}/100.</div></div>
-          <div class="detail-box"><div class="detail-label">ENTRY STRATEGY</div><div class="detail-text">${item.entry}</div></div>
+          <div class="detail-box"><div class="detail-label">ENTRY QUALITY</div><div class="detail-text"><span style="color:${entryRead.color};">${entry}/100 · ${entryRead.label}</span>. ${entryRead.copy}<br>${item.entry}</div></div>
           <div class="detail-box"><div class="detail-label">SENTIMENT CHECK</div><div class="detail-text">Retail sentiment ${item.retail}/100. ${retailNote} Institutional signal ${item.institutional}/100.</div></div>
           <div class="detail-box"><div class="detail-label">WHAT COULD BREAK IT</div><div class="detail-text">${item.risk}</div></div>
         </div>
@@ -2140,6 +2198,8 @@ function watchlistScore(item){
   const rawValuation=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:RESEARCH_SCORE_DEFAULTS[item.ticker]?.valuation??wider?.valuation??50));
   const valuationGuard=valuationGuardrailFor(item.ticker,item.category||profile.type,rawValuation,move);
   const valuation=valuationGuard.score;
+  const entry=entryQualityScore(move,valuation,profile.fundamental??opp?.quality??emerging?.revenue??wider?.quality??55);
+  const entryRead=entryQualityRead(move,entry);
   const macro=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:RESEARCH_SCORE_DEFAULTS[item.ticker]?.macro??emerging?.narrative??wider?.macro??55));
   const opportunity=clamp(opp?opportunityScore({...opp,drop:move}):profile.opportunity??(emerging?emerging.leader-8:wider?wideBaseOpportunity(wider,move):45));
   const quality=clamp(profile.fundamental??opp?.quality??emerging?.revenue??wider?.quality??55);
@@ -2153,10 +2213,11 @@ function watchlistScore(item){
   const score=Math.round(clamp(
     quality*0.19 +
     thesis*0.18 +
-    valuation*0.15 +
+    valuation*0.12 +
     macro*0.12 +
-    opportunity*0.19 +
+    opportunity*0.16 +
     technical*0.10 +
+    entry*0.10 +
     history.score*0.03 +
     outcomes.score*0.04 +
     regime.adjustment +
@@ -2166,7 +2227,7 @@ function watchlistScore(item){
   const thesisBreak=thesis<50 || quality<50;
   const adjusted=thesisBreak?Math.min(score,49):score;
   const adjustedAction=thesisBreak?{label:'DO NOT ADD',color:'#A32D2D',copy:'Quality or thesis score is too weak. Do more research before committing capital.'}:action;
-  return {score:adjusted,action:adjustedAction,price,move,quality,thesis,valuation,macro,opportunity,technical,history,outcomes,confidence,regime,portfolio,valuationGuard};
+  return {score:adjusted,action:adjustedAction,price,move,quality,thesis,valuation,entry,entryRead,macro,opportunity,technical,history,outcomes,confidence,regime,portfolio,valuationGuard};
 }
 function wideBaseOpportunity(item,move){
   const technical=Number.isFinite(move)&&move<0?Math.min(12,Math.abs(move)*1.4):0;
@@ -2254,7 +2315,9 @@ function buildNextDollarCandidates(){
     const underBoost=total?clamp((target.target-alloc)*1.2,-18,14):0;
     const concentrationPenalty=alloc>=target.max?28:alloc>=target.target?10:0;
     const unknownPenalty=(e.item&&e.item.category==='Unclassified ticker')?8:0;
-    const finalScore=Math.round(clamp(base.score+underBoost-concentrationPenalty-unknownPenalty));
+    const singleStock=assetClass(e.symbol)==='Stock';
+    const entryPenalty=singleStock&&base.entry!==undefined&&base.entry<50?Math.round((50-base.entry)*0.45):0;
+    const finalScore=Math.round(clamp(base.score+underBoost-concentrationPenalty-unknownPenalty-entryPenalty));
     const action=nextDollarAction(finalScore,alloc,target.target,target.max);
     const price=base.price??map[e.symbol]?.price??null;
     return {
@@ -2264,7 +2327,7 @@ function buildNextDollarCandidates(){
       score:finalScore,
       baseScore:base.score,
       action,
-      reason:[base.reason||base.action?.copy||'Ranked from local score inputs.',base.regime?.note,base.portfolio?.note,base.valuationGuard?.note].filter(Boolean).join(' '),
+      reason:[base.reason||base.action?.copy||'Ranked from local score inputs.',base.entryRead?`Entry: ${base.entryRead.label}. ${base.entryRead.copy}`:'',base.regime?.note,base.portfolio?.note,base.valuationGuard?.note].filter(Boolean).join(' '),
       currentAlloc:alloc,
       currentValue:value,
       target:target.target,
@@ -2277,6 +2340,14 @@ function buildNextDollarCandidates(){
       valuationGuard:base.valuationGuard
     };
   });
+  const indexCandidate=[...candidates].find(c=>c.symbol==='VOO');
+  if(indexCandidate){
+    candidates.forEach(c=>{
+      if(assetClass(c.symbol)==='Stock'&&c.action.label.includes('ADD')&&c.score<indexCandidate.score+6){
+        c.action={label:'WATCH',color:'#BA7517',copy:'Does not clear the index hurdle by enough today. Keep researching or wait for a better entry.'};
+      }
+    });
+  }
   const cashScore=candidates.some(c=>c.score>=72&&c.currentAlloc<c.max)?48:62;
   candidates.push({symbol:'CASH',name:'Cash / Wait',source:'Risk Control',score:cashScore,baseScore:cashScore,action:{label:cashScore>=60?'WAIT IN CASH':'LOW PRIORITY',color:cashScore>=60?'#BA7517':'#3a3d6a',copy:'Hold cash when no candidate clears the bar or when you want dry powder.'},reason:'Default when no asset is clearly better than patience.',currentAlloc:0,currentValue:0,target:0,max:100,targetLabel:'Dry powder',price:null,shares:null});
   return candidates.sort((a,b)=>b.score-a.score);
@@ -2312,7 +2383,7 @@ function renderWatchlist(){
     const stored=userWatchlist().some(r=>r.ticker===item.ticker);
     const scores=[
       ['Fundamentals',score.quality],['Thesis',score.thesis],['Valuation',score.valuation],
-      ['Macro',score.macro],['Technical',score.technical],['History',score.history.score]
+      ['Entry',score.entry],['Macro',score.macro],['Technical',score.technical],['History',score.history.score]
     ].map(([label,val])=>`<div class="research-score"><div class="detail-label">${label.toUpperCase()}</div><div class="research-score-num" style="color:${col(val)};">${Math.round(val)}</div></div>`).join('');
     return `<div class="op-card">
       <div class="op-head" onclick="toggleCard(this)">
@@ -2328,7 +2399,7 @@ function renderWatchlist(){
       <div class="op-details">
         <div class="research-score-grid">${scores}</div>
         <div class="detail-grid">
-          <div class="detail-box"><div class="detail-label">PULL-TRIGGER READ</div><div class="detail-text">${esc(score.action.copy)} Opportunity score ${score.opportunity}/100 · confidence ${score.confidence}/100.</div></div>
+          <div class="detail-box"><div class="detail-label">PULL-TRIGGER READ</div><div class="detail-text">${esc(score.action.copy)} Entry ${score.entry}/100 · ${esc(score.entryRead.label)}. Opportunity score ${score.opportunity}/100 · confidence ${score.confidence}/100.</div></div>
           <div class="detail-box"><div class="detail-label">WHY IT'S HERE</div><div class="detail-text">${esc(item.notes||'No note yet.')}</div></div>
           <div class="detail-box"><div class="detail-label">THEME / MACRO</div><div class="detail-text">${esc(item.theme||themeFor(item.ticker))}</div></div>
           <div class="detail-box"><div class="detail-label">HISTORY / OUTCOMES</div><div class="detail-text">${esc(score.history.label)} · ${esc(score.outcomes?.label||'No outcome history yet')}. Saved snapshots make this smarter over time.</div></div>

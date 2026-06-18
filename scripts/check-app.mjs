@@ -137,6 +137,12 @@ function browserLogicSmoke(script) {
   assert(context.watchlistRecommendations().length > 0, 'Watchlist recommendations should build');
   assert(context.buildNextDollarCandidates().length > 0, 'Best Next Dollar candidates should build');
   assert(context.cacheHasCycleData() === false, 'Empty BTC cache should not count as valid');
+  const upSetup = context.opportunitySetup({ ticker: 'FIX', drop: 12.3, quality: 82, thesis: 80, confidence: 60, newsSeverity: 40, reason: 'strong momentum' });
+  const downSetup = context.opportunitySetup({ ticker: 'AXON', drop: -5.5, quality: 85, thesis: 83, confidence: 61, newsSeverity: 42, reason: 'valuation reset', liveNews: { title: 'valuation reset', severity: 42 } });
+  assert(upSetup.valuationImproved === false, 'Positive stock moves should not count as valuation improved');
+  assert(upSetup.entryRead.label.includes('extended') || upSetup.entryRead.label.includes('stretched'), 'Positive stock moves should warn about entry');
+  assert(downSetup.valuationImproved === true, 'Meaningful stock drops can count as valuation improved');
+  assert(downSetup.entry >= upSetup.entry, 'Downside entries should score better than upside entries');
 
   return context.loadScreener()
     .then(() => {

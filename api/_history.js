@@ -226,4 +226,4 @@ async function generateHistoricalBackfill({ days = 365, tickers = [] } = {}) {
   };
 }
 
-export { generateHistoricalBackfill };
+export { generateHistoricalBackfill, yahooDaily };
