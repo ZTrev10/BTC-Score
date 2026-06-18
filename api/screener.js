@@ -2,6 +2,7 @@
 // Returns current price, % change from previous close, and volume for each symbol
 
 const DEFAULT_SYMBOLS = [
+  'SPY','QQQ','IWM','TLT','VOO',
   'META','GOOGL','AMZN','MSFT','ASML','TSM','V','MA','ISRG','CPRT','FIX','PWR','AXON','CRWD','DDOG','TMDX',
   'KTOS','HWM','BWXT','VST','ETN','HUBB','XYL','MWA',
   'IDXX','RMD','SYK','BSX','BRO','AJG','SPGI','MCO','ICE','ROP','DHR','TDG','GWW','FAST','ORLY','AZO','TJX','COST',
@@ -10,6 +11,11 @@ const DEFAULT_SYMBOLS = [
 ];
 
 const COMPANY_HINTS = {
+  SPY: 'SPDR S&P 500 ETF',
+  QQQ: 'Invesco QQQ Trust',
+  IWM: 'iShares Russell 2000 ETF',
+  TLT: 'iShares 20+ Year Treasury Bond ETF',
+  VOO: 'Vanguard S&P 500 ETF',
   META: 'Meta Platforms',
   GOOGL: 'Alphabet',
   AMZN: 'Amazon',

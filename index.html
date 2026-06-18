@@ -1202,13 +1202,116 @@ function renderBriefWatchlistMini(){
 function savedWatchlistSet(){
   return new Set(watchlistRows().map(item=>String(item.ticker||'').toUpperCase()));
 }
+function valuationGuardrailFor(symbol,category,rawValuation,move=null){
+  const text=`${symbol||''} ${category||''} ${themeFor(symbol||'')}`.toLowerCase();
+  let cap=100, floor=0, note='Valuation treated normally.';
+  if(/costco|transdigm|compounder|quality|medical|healthcare|software|data moat|market infrastructure/.test(text)){
+    cap=Number.isFinite(move)&&move<=-5?78:66;
+    note='Premium-quality name: score is capped unless the price has actually reset.';
+  }
+  if(/speculative|space|fintech|younger public|crypto apps/.test(text)){
+    cap=62;
+    note='Speculative name: valuation gets a stricter ceiling until execution is clearer.';
+  }
+  if(/insurance|industrial distributor|electrical distribution|water|infrastructure|grid|power|defensive/.test(text)){
+    floor=45;
+    note='Real-economy compounder: valuation gets some credit if the thesis is durable.';
+  }
+  const score=Math.round(clamp(Math.max(floor,Math.min(cap,Number(rawValuation)||50))));
+  return {score,cap,floor,note};
+}
+function marketRegime(){
+  const spy=liveChangeFor('SPY');
+  const qqq=liveChangeFor('QQQ');
+  const iwm=liveChangeFor('IWM');
+  const tlt=liveChangeFor('TLT');
+  const btc=currentCycleScore();
+  const riskMove=[spy,qqq,iwm].filter(Number.isFinite);
+  const avgRisk=riskMove.length?riskMove.reduce((a,b)=>a+b,0)/riskMove.length:0;
+  let label='Neutral / balanced';
+  let risk='neutral';
+  if(avgRisk<=-1.5 || (Number.isFinite(qqq)&&qqq<=-2)){label='Risk-off / quality-first';risk='off';}
+  else if(avgRisk>=1.2 && (Number.isFinite(qqq)?qqq>=0:1)){label='Risk-on / growth-friendly';risk='on';}
+  if(Number.isFinite(tlt)&&tlt<=-1.2&&risk!=='on'){label='Rates pressure / duration-sensitive';risk='rates';}
+  if(btc!==null&&btc<20){label='Crypto fear / reserve-check';risk='cryptoFear';}
+  return {label,risk,avgRisk,spy,qqq,iwm,tlt,btc};
+}
+function marketRegimeFit({symbol='',category='',theme='',quality=60,macro=55}={}){
+  const regime=marketRegime();
+  const text=`${symbol} ${category} ${theme}`.toLowerCase();
+  let adjustment=0;
+  let note=`${regime.label}.`;
+  if(regime.risk==='off'){
+    if(/defensive|costco|insurance|healthcare|water|consumer|payments|data moat/.test(text))adjustment+=5;
+    if(/speculative|cloud software|semiconductor|crypto|fintech|younger public/.test(text))adjustment-=7;
+    if(quality>=85)adjustment+=2;
+  }else if(regime.risk==='rates'){
+    if(/defensive|insurance|cash|payments|industrial distributor/.test(text))adjustment+=3;
+    if(/software|growth|speculative|semiconductor|crypto|duration/.test(text))adjustment-=6;
+  }else if(regime.risk==='on'){
+    if(/semiconductor|software|ai|cloud|emerging|grid|power|infrastructure/.test(text))adjustment+=4;
+    if(/defensive|cash/.test(text))adjustment-=2;
+  }else if(regime.risk==='cryptoFear'){
+    if(/btc|bitcoin|crypto/.test(text))adjustment+=6;
+    if(/speculative|fintech/.test(text))adjustment-=3;
+  }
+  if(macro>=76)adjustment+=2;
+  if(macro<50)adjustment-=4;
+  return {score:clamp(55+adjustment),adjustment:Math.round(adjustment),note,regime};
+}
+function portfolioPressureFor(symbol){
+  const {map,total}=holdingAllocMap();
+  const s=cleanSymbol(symbol);
+  if(!total||!map[s])return {adjustment:0,alloc:0,note:'No loaded portfolio position.'};
+  const source=watchlistSeedFor(s).source||'';
+  const target=targetAllocationFor(s,source);
+  const alloc=map[s].alloc||0;
+  let adjustment=0;
+  if(alloc>=target.max)adjustment=-22;
+  else if(alloc>=target.target)adjustment=-10;
+  else if(alloc<target.target*0.5)adjustment=6;
+  return {adjustment,alloc,target:target.target,max:target.max,note:`Loaded allocation ${alloc.toFixed(1)}%; target ${target.target}% / max ${target.max}%.`};
+}
+function historicalOutcomeScore(ticker,theme){
+  const sym=String(ticker||'').toUpperCase();
+  const current=livePriceFor(sym);
+  const snaps=memorySnapshots();
+  let hits=0,total=0,returns=[];
+  snaps.forEach(s=>{
+    const rows=[
+      ...(s.watchlistScores||[]).map(r=>({ticker:r.ticker,score:r.score,price:r.price,date:s.createdAt})),
+      ...(s.opportunities||[]).map(r=>({ticker:r.ticker,score:r.score,price:r.price,date:s.createdAt})),
+      s.research?{ticker:s.research.ticker,score:s.research.score,price:s.research.price,date:s.createdAt}:null
+    ].filter(Boolean);
+    rows.forEach(r=>{
+      if(String(r.ticker||'').toUpperCase()===sym){
+        hits+=1;
+        total+=Number(r.score)||50;
+        if(current&&r.price&&Date.parse(r.date)<Date.now()){
+          returns.push((current-Number(r.price))/Number(r.price)*100);
+        }
+      }
+    });
+    if(theme && JSON.stringify(s).toLowerCase().includes(String(theme).slice(0,18).toLowerCase())){hits+=0.35;total+=52;}
+  });
+  if(!hits)return {score:50,label:'No outcome history yet',avgReturn:null,hits:0};
+  const base=total/hits;
+  const avgReturn=returns.length?returns.reduce((a,b)=>a+b,0)/returns.length:null;
+  const returnBoost=avgReturn===null?0:clamp(avgReturn*1.2,-14,18);
+  return {score:Math.round(clamp(base+returnBoost)),label:`${hits % 1 ? hits.toFixed(1) : hits} saved signal${hits===1?'':'s'}${avgReturn!==null?`; avg since snapshot ${pct(avgReturn)}`:''}`,avgReturn,hits};
+}
 function widerMarketCandidateScore(c){
   const move=liveChangeFor(c.ticker);
   const price=livePriceFor(c.ticker);
   const news=liveNewsFor(c.ticker);
   const history=historyScoreFor(c.ticker,c.theme);
+  const outcomes=historicalOutcomeScore(c.ticker,c.theme);
+  const regime=marketRegimeFit(c);
+  const portfolio=portfolioPressureFor(c.ticker);
   const technical=Number.isFinite(move)?(move<0?clamp(55+Math.min(24,Math.abs(move)*3.2)):clamp(48-Math.min(14,Math.abs(move)*1.4))):52;
-  const valuation=clamp(c.valuation+(Number.isFinite(move)&&move<0?Math.min(14,Math.abs(move)*1.8):0));
+  const rawValuation=clamp(c.valuation+(Number.isFinite(move)&&move<0?Math.min(14,Math.abs(move)*1.8):0));
+  const valuationGuard=valuationGuardrailFor(c.ticker,c.category,rawValuation,move);
+  const valuation=valuationGuard.score;
   const thesisPenalty=news?.thesisRisk==='thesis-breaking'?32:news?.thesisRisk==='verify'?8:0;
   const liveBonus=news?4:0;
   const score=Math.round(clamp(
@@ -1218,16 +1321,19 @@ function widerMarketCandidateScore(c){
     c.macro*0.13+
     c.confidence*0.11+
     technical*0.11+
-    history.score*0.07+
+    outcomes.score*0.04+
+    history.score*0.03+
     liveBonus-
-    thesisPenalty
+    thesisPenalty+
+    regime.adjustment+
+    portfolio.adjustment
   ));
   let action={label:'WATCH ONLY',color:'#BA7517',copy:'Good business, but not enough edge yet.'};
   if(score>=84&&Number.isFinite(move)&&move<=-4&&valuation>=66&&c.confidence>=62)action={label:'RARE SETUP REVIEW',color:'#1D9E75',copy:'Quality, thesis, valuation relief, and price action line up. Verify current news before buying.'};
   else if(score>=76)action={label:'HIGH-PRIORITY REVIEW',color:'#639922',copy:'Strong candidate to research now; could deserve a watchlist slot.'};
   else if(score>=68)action={label:'ADD TO WATCHLIST',color:'#BA7517',copy:'Worth tracking, but wait for a better price or stronger confirmation.'};
   else if(score<58)action={label:'SKIP',color:'#E24B4A',copy:'Not compelling enough for the watchlist today.'};
-  return {score,action,price,move,valuation,technical,history,news};
+  return {score,action,price,move,valuation,technical,history,outcomes,news,regime,portfolio,valuationGuard};
 }
 function watchlistRecommendations(){
   const saved=savedWatchlistSet();
@@ -1280,7 +1386,7 @@ function watchlistRecommendations(){
       score:setup.score,
       color:setup.action.color,
       label:setup.action.label,
-      why:`${setup.action.copy} ${Number.isFinite(setup.move)?moveDirection(setup.move).label+' '+moveDirection(setup.move).display:'Move unavailable'} · ${c.category} · ${c.notes}`,
+      why:`${setup.action.copy} ${Number.isFinite(setup.move)?moveDirection(setup.move).label+' '+moveDirection(setup.move).display:'Move unavailable'} · ${c.category} · ${setup.regime.note} ${setup.portfolio.note} ${setup.outcomes.label}.`,
       add:`addWiderMarketToWatchlist('${esc(c.ticker)}')`
     }));
   return [...opps,...emerging,...wider].sort((a,b)=>b.score-a.score).slice(0,7);
@@ -1836,17 +1942,23 @@ function watchlistScore(item){
   const profile=researchProfile(item.ticker);
   const opp=WATCHLIST.find(x=>x.ticker===item.ticker);
   const emerging=EMERGING_LEADERS.find(x=>x.ticker===item.ticker);
+  const wider=WIDER_MARKET_CANDIDATES.find(x=>x.ticker===item.ticker);
   const q=window._screenerData?.[item.ticker]||null;
   const move=q?.changePercent??liveChangeFor(item.ticker)??opp?.drop??0;
   const price=q?.price??livePriceFor(item.ticker);
-  const valuation=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:RESEARCH_SCORE_DEFAULTS[item.ticker]?.valuation??50));
-  const macro=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:RESEARCH_SCORE_DEFAULTS[item.ticker]?.macro??emerging?.narrative??55));
-  const opportunity=clamp(opp?opportunityScore({...opp,drop:move}):profile.opportunity??(emerging?emerging.leader-8:45));
-  const quality=clamp(profile.fundamental??opp?.quality??emerging?.revenue??55);
-  const thesis=clamp(profile.thesis??opp?.thesis??emerging?.leader??50);
-  const confidence=clamp(opp?.confidence??emerging?.institutional??55);
+  const rawValuation=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:RESEARCH_SCORE_DEFAULTS[item.ticker]?.valuation??wider?.valuation??50));
+  const valuationGuard=valuationGuardrailFor(item.ticker,item.category||profile.type,rawValuation,move);
+  const valuation=valuationGuard.score;
+  const macro=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:RESEARCH_SCORE_DEFAULTS[item.ticker]?.macro??emerging?.narrative??wider?.macro??55));
+  const opportunity=clamp(opp?opportunityScore({...opp,drop:move}):profile.opportunity??(emerging?emerging.leader-8:wider?wideBaseOpportunity(wider,move):45));
+  const quality=clamp(profile.fundamental??opp?.quality??emerging?.revenue??wider?.quality??55);
+  const thesis=clamp(profile.thesis??opp?.thesis??emerging?.leader??wider?.thesis??50);
+  const confidence=clamp(opp?.confidence??emerging?.institutional??wider?.confidence??55);
   const technical=move<0?clamp(55+Math.min(30,Math.abs(move)*4)):clamp(48-Math.min(18,Math.abs(move)*1.5));
   const history=historyScoreFor(item.ticker,item.theme||profile.type);
+  const outcomes=historicalOutcomeScore(item.ticker,item.theme||profile.type);
+  const regime=marketRegimeFit({symbol:item.ticker,category:item.category||profile.type,theme:item.theme||profile.type,quality,macro});
+  const portfolio=portfolioPressureFor(item.ticker);
   const score=Math.round(clamp(
     quality*0.19 +
     thesis*0.18 +
@@ -1854,13 +1966,20 @@ function watchlistScore(item){
     macro*0.12 +
     opportunity*0.19 +
     technical*0.10 +
-    history.score*0.07
+    history.score*0.03 +
+    outcomes.score*0.04 +
+    regime.adjustment +
+    portfolio.adjustment
   ));
   const action=researchDecision(score,'new');
   const thesisBreak=thesis<50 || quality<50;
   const adjusted=thesisBreak?Math.min(score,49):score;
   const adjustedAction=thesisBreak?{label:'DO NOT ADD',color:'#A32D2D',copy:'Quality or thesis score is too weak. Do more research before committing capital.'}:action;
-  return {score:adjusted,action:adjustedAction,price,move,quality,thesis,valuation,macro,opportunity,technical,history,confidence};
+  return {score:adjusted,action:adjustedAction,price,move,quality,thesis,valuation,macro,opportunity,technical,history,outcomes,confidence,regime,portfolio,valuationGuard};
+}
+function wideBaseOpportunity(item,move){
+  const technical=Number.isFinite(move)&&move<0?Math.min(12,Math.abs(move)*1.4):0;
+  return clamp(item.valuation*0.35+item.quality*0.25+item.thesis*0.25+technical);
 }
 function holdingAllocMap(){
   const rows=aggregateHoldings(portfolio());
@@ -1876,6 +1995,7 @@ function targetAllocationFor(symbol,source=''){
   if(s==='ETH')return {target:2,max:4,label:'ETH smaller crypto sleeve'};
   if(assetClass(s)==='Crypto')return {target:2,max:4,label:'Speculative crypto sleeve'};
   const profile=researchProfile(s);
+  if(String(source).includes('Wider Market'))return {target:4,max:8,label:'Wider-market quality sleeve'};
   if(profile.fundamental>=85&&profile.thesis>=80)return {target:8,max:12,label:'Quality compounder sleeve'};
   if(String(source).includes('Emerging'))return {target:3,max:6,label:'Emerging leader sleeve'};
   if(profile.fundamental<60)return {target:1,max:3,label:'Speculative / research-only sleeve'};
@@ -1926,6 +2046,12 @@ function buildNextDollarCandidates(){
   };
   ['VOO','BTC','ETH'].forEach(s=>add(s,s==='VOO'?'Core Index':'Crypto Rule'));
   watchlistRows().forEach(item=>add(item.ticker,item.source||'Watchlist',item));
+  WIDER_MARKET_CANDIDATES
+    .map(c=>({c,setup:widerMarketCandidateScore(c)}))
+    .filter(({setup})=>setup.score>=76)
+    .sort((a,b)=>b.setup.score-a.setup.score)
+    .slice(0,6)
+    .forEach(({c})=>add(c.ticker,'Wider Market Scan',watchlistSeedFor(c.ticker)));
   rows.forEach(r=>add(r.symbol,'Owned'));
   const amount=Number(document.getElementById('next-dollar-amount')?.value||1000)||1000;
   const candidates=[...entries.values()].map(e=>{
@@ -1947,14 +2073,17 @@ function buildNextDollarCandidates(){
       score:finalScore,
       baseScore:base.score,
       action,
-      reason:base.reason||base.action?.copy||'Ranked from local score inputs.',
+      reason:[base.reason||base.action?.copy||'Ranked from local score inputs.',base.regime?.note,base.portfolio?.note,base.valuationGuard?.note].filter(Boolean).join(' '),
       currentAlloc:alloc,
       currentValue:value,
       target:target.target,
       max:target.max,
       targetLabel:target.label,
       price,
-      shares:price?amount/price:null
+      shares:price?amount/price:null,
+      regime:base.regime,
+      portfolio:base.portfolio,
+      valuationGuard:base.valuationGuard
     };
   });
   const cashScore=candidates.some(c=>c.score>=72&&c.currentAlloc<c.max)?48:62;
@@ -1976,7 +2105,7 @@ function renderBestNextDollar(){
   <div class="table-wrap"><table><thead><tr><th>Rank</th><th>Candidate</th><th>Action</th><th>Score</th><th>Current Alloc</th><th>Target</th><th>Why</th></tr></thead><tbody>
     ${top.map((c,idx)=>`<tr><td>${idx+1}</td><td><strong>${esc(c.symbol)}</strong><br><span style="color:#3a3d6a;">${esc(c.source)}</span></td><td style="color:${c.action.color};">${esc(c.action.label)}</td><td>${c.score}</td><td>${c.currentAlloc.toFixed(1)}%</td><td>${c.target}% / max ${c.max}%</td><td>${esc(c.reason)}</td></tr>`).join('')}
   </tbody></table></div>
-  <p style="font-size:10px;color:#3a3d6a;line-height:1.6;margin-top:8px;">Portfolio-aware: owned positions get concentration penalties above target, underweight high-score names get a boost, BTC reserve buying only outranks core when BTC Score is below 20.</p>`;
+  <p style="font-size:10px;color:#3a3d6a;line-height:1.6;margin-top:8px;">Portfolio-aware: owned positions get concentration penalties above target, underweight high-score names get a boost, premium names need valuation relief, and current market regime adjusts the final score.</p>`;
 }
 function renderWatchlist(){
   const el=document.getElementById('watchlist-list');
@@ -2011,7 +2140,8 @@ function renderWatchlist(){
           <div class="detail-box"><div class="detail-label">PULL-TRIGGER READ</div><div class="detail-text">${esc(score.action.copy)} Opportunity score ${score.opportunity}/100 · confidence ${score.confidence}/100.</div></div>
           <div class="detail-box"><div class="detail-label">WHY IT'S HERE</div><div class="detail-text">${esc(item.notes||'No note yet.')}</div></div>
           <div class="detail-box"><div class="detail-label">THEME / MACRO</div><div class="detail-text">${esc(item.theme||themeFor(item.ticker))}</div></div>
-          <div class="detail-box"><div class="detail-label">HISTORY SIGNAL</div><div class="detail-text">${esc(score.history.label)}. Saved snapshots make this smarter over time.</div></div>
+          <div class="detail-box"><div class="detail-label">HISTORY / OUTCOMES</div><div class="detail-text">${esc(score.history.label)} · ${esc(score.outcomes?.label||'No outcome history yet')}. Saved snapshots make this smarter over time.</div></div>
+          <div class="detail-box"><div class="detail-label">REGIME / ALLOCATION</div><div class="detail-text">${esc(score.regime?.note||marketRegime().label)} ${esc(score.portfolio?.note||'No loaded portfolio position.')} ${esc(score.valuationGuard?.note||'')}</div></div>
           <div class="detail-box"><div class="detail-label">TRACKING</div><div class="detail-text">Added ${esc(added)}. ${stored?'Saved in browser watchlist.':'Starter candidate; add it to save permanently.'}</div></div>
         </div>
         <div class="research-actions">
@@ -2030,6 +2160,8 @@ function researchProfile(symbol){
   if(known)return {ticker:sym,...known};
   if(watch)return {ticker:sym,name:watch.name,type:watch.category,fundamental:watch.quality,thesis:watch.thesis,valuationScore:58,macroScore:60,opportunity:opportunityScore(watch),summary:`Known watchlist company in ${watch.category}. V1 uses watchlist assumptions until full fundamentals are connected.`,bull:'Quality and thesis assumptions are strong enough to keep it on the buyable watchlist.',bear:'Live fundamentals are not connected yet, so confidence should stay moderate until verified.',valuationText:'Treat valuation as neutral until research data is connected.',macroText:'Macro exposure depends on the company theme and current market regime.',risks:watch.reason};
   if(emerging)return {ticker:sym,name:emerging.name,type:emerging.theme,fundamental:emerging.revenue,thesis:emerging.leader,valuationScore:52,macroScore:emerging.narrative,opportunity:emergingAction(emerging).label==='WATCH CLOSELY'?68:58,summary:`Emerging leader candidate tied to ${emerging.theme}.`,bull:'Theme strength and revenue/guidance signals could compound if the trend becomes durable.',bear:'Emerging leaders can be expensive, cyclical, or early. Require execution confirmation.',valuationText:emerging.entry,macroText:`Narrative strength ${emerging.narrative}/100.`,risks:emerging.risk};
+  const wider=WIDER_MARKET_CANDIDATES.find(x=>x.ticker===sym);
+  if(wider)return {ticker:sym,name:wider.name,type:wider.category,fundamental:wider.quality,thesis:wider.thesis,valuationScore:wider.valuation,macroScore:wider.macro,opportunity:wideBaseOpportunity(wider,liveChangeFor(sym)),summary:`Wider-market candidate tied to ${wider.theme}.`,bull:'The business quality and theme fit are strong enough to monitor beyond the usual tech-heavy list.',bear:'Even high-quality wider-market names can be bad buys if valuation is stretched or the sector thesis weakens.',valuationText:wider.notes,macroText:`Macro fit ${wider.macro}/100. ${marketRegimeFit({symbol:sym,category:wider.category,theme:wider.theme,quality:wider.quality,macro:wider.macro}).note}`,risks:'Verify current fundamentals, valuation, balance sheet, and news before committing capital.'};
   return {ticker:sym,name:sym,type:'Unclassified ticker',fundamental:55,thesis:50,valuationScore:50,macroScore:50,opportunity:45,summary:'No local profile yet. V1 can still create a research shell, but this needs manual notes or future fundamentals integration.',bull:'Unknown until company quality, growth, margins, balance sheet, and moat are researched.',bear:'Unknown businesses should not receive new capital without a clear thesis and valuation work.',valuationText:'No valuation data connected yet.',macroText:'Macro exposure unknown.',risks:'Missing research profile. Add notes before making a decision.'};
 }
 function researchDecision(score,context){
@@ -2294,12 +2426,12 @@ function sectorFor(symbol){
   if(assetClass(s)==='Bond / Cash-like')return 'Fixed Income';
   const sectors={
     META:'Communication Services',GOOGL:'Communication Services',GOOG:'Communication Services',NFLX:'Communication Services',DIS:'Communication Services',TMUS:'Communication Services',
-    COST:'Consumer Defensive',WMT:'Consumer Defensive',TGT:'Consumer Defensive',PG:'Consumer Defensive',KO:'Consumer Defensive',PEP:'Consumer Defensive',
-    AMZN:'Consumer Discretionary',TSLA:'Consumer Discretionary',HD:'Consumer Discretionary',LOW:'Consumer Discretionary',BKNG:'Consumer Discretionary',MELI:'Consumer Discretionary',LULU:'Consumer Discretionary',
-    JPM:'Financials',BAC:'Financials','BRK.B':'Financials','BRK.A':'Financials',V:'Payments / Financials',MA:'Payments / Financials',AXP:'Payments / Financials',SOFI:'Financials',COIN:'Crypto / Financials',
-    UNH:'Healthcare',LLY:'Healthcare',NVO:'Healthcare',JNJ:'Healthcare',ABBV:'Healthcare',ISRG:'Healthcare',TMDX:'Healthcare',
+    COST:'Consumer Defensive',WMT:'Consumer Defensive',TGT:'Consumer Defensive',PG:'Consumer Defensive',KO:'Consumer Defensive',PEP:'Consumer Defensive',TJX:'Consumer Defensive',
+    AMZN:'Consumer Discretionary',TSLA:'Consumer Discretionary',HD:'Consumer Discretionary',LOW:'Consumer Discretionary',BKNG:'Consumer Discretionary',MELI:'Consumer Discretionary',LULU:'Consumer Discretionary',ORLY:'Consumer Discretionary',AZO:'Consumer Discretionary',
+    JPM:'Financials',BAC:'Financials','BRK.B':'Financials','BRK.A':'Financials',V:'Payments / Financials',MA:'Payments / Financials',AXP:'Payments / Financials',SOFI:'Financials',COIN:'Crypto / Financials',BRO:'Insurance',AJG:'Insurance',SPGI:'Financial Data',MCO:'Financial Data',ICE:'Market Infrastructure',
+    UNH:'Healthcare',LLY:'Healthcare',NVO:'Healthcare',JNJ:'Healthcare',ABBV:'Healthcare',ISRG:'Healthcare',TMDX:'Healthcare',IDXX:'Healthcare',RMD:'Healthcare',SYK:'Healthcare',BSX:'Healthcare',DHR:'Life Science Tools',
     XOM:'Energy',CVX:'Energy',COP:'Energy',SLB:'Energy',
-    CAT:'Industrials',GE:'Industrials',HON:'Industrials',DE:'Industrials',CPRT:'Industrials',FIX:'Infrastructure',PWR:'Infrastructure',ETN:'Electrical Equipment',HUBB:'Electrical Equipment',HWM:'Aerospace',BWXT:'Nuclear / Defense',VST:'Power / Utilities',XYL:'Water Infrastructure',MWA:'Water Infrastructure',
+    CAT:'Industrials',GE:'Industrials',HON:'Industrials',DE:'Industrials',CPRT:'Industrials',ROP:'Industrial Software',GWW:'Industrial Distribution',FAST:'Industrial Distribution',FIX:'Infrastructure',PWR:'Infrastructure',ETN:'Electrical Equipment',HUBB:'Electrical Equipment',HWM:'Aerospace',TDG:'Aerospace',BWXT:'Nuclear / Defense',VST:'Power / Utilities',CEG:'Power / Utilities',GEV:'Grid / Power Equipment',EME:'Infrastructure',WCC:'Electrical Distribution',XYL:'Water Infrastructure',MWA:'Water Infrastructure',
     NOC:'Defense',LMT:'Defense',RTX:'Defense',KTOS:'Defense',HEI:'Aerospace / Defense',
     PLTR:'Software / AI',MSFT:'Software / AI',ORCL:'Software',CRM:'Software',NOW:'Software',ADBE:'Software',SNOW:'Cloud Software',DDOG:'Cloud Software',NET:'Cloud Software',CRWD:'Cybersecurity',PANW:'Cybersecurity',
     AAPL:'Consumer Technology',NVDA:'Semiconductors',AVGO:'Semiconductors',AMD:'Semiconductors',ASML:'Semiconductor Equipment',TSM:'Semiconductor Foundry',LRCX:'Semiconductor Equipment',KLAC:'Semiconductor Equipment',MU:'Memory Semiconductors',
@@ -2315,11 +2447,13 @@ function themeFor(symbol){
   if(assetClass(s)==='Bond / Cash-like')return 'Stability / income';
   const themes={
     META:'AI ads / digital platforms',GOOGL:'AI search / cloud',GOOG:'AI search / cloud',AMZN:'AWS / commerce platform',MSFT:'AI software platform',AAPL:'Consumer ecosystem',
-    COST:'Defensive consumer compounder',WMT:'Defensive retail scale',HD:'Housing / home improvement',MELI:'Latin America commerce / fintech',BKNG:'Travel platform',
+    COST:'Defensive consumer compounder',WMT:'Defensive retail scale',TJX:'Off-price retail / trade-down consumer',ORLY:'Auto repair demand / buybacks',AZO:'Auto repair demand / buybacks',HD:'Housing / home improvement',MELI:'Latin America commerce / fintech',BKNG:'Travel platform',
     RKLB:'Space infrastructure',PLTR:'AI software / data platforms',SOFI:'Fintech / consumer credit',COIN:'Crypto rails',
     BTC:'Digital scarcity / crypto reserve',ETH:'Smart contract rails',SOL:'High-throughput crypto apps',
-    CPRT:'Under-the-radar compounder',FIX:'AI data center infrastructure',PWR:'Grid modernization',ETN:'Electrification / power equipment',HUBB:'Grid hardening',VST:'Power demand / data centers',
-    AXON:'Public safety software',TMDX:'Medical devices / logistics',ISRG:'Surgical robotics',KTOS:'Defense autonomy',HWM:'Aerospace supply chain',BWXT:'Nuclear / naval reactors',
+    CPRT:'Under-the-radar compounder',BRO:'Insurance brokerage compounder',AJG:'Insurance brokerage compounder',SPGI:'Ratings / indexes / market data',MCO:'Credit ratings / analytics',ICE:'Exchange and market data infrastructure',
+    ROP:'Niche vertical software compounder',DHR:'Life science tools',TDG:'Aerospace aftermarket pricing power',GWW:'MRO distribution',FAST:'Industrial supplies distribution',
+    FIX:'AI data center infrastructure',PWR:'Grid modernization',ETN:'Electrification / power equipment',HUBB:'Grid hardening',VST:'Power demand / data centers',CEG:'Nuclear power / data center load growth',GEV:'Grid and power generation equipment',EME:'Data center electrical/mechanical services',WCC:'Electrical distribution / electrification supply chain',
+    AXON:'Public safety software',TMDX:'Medical devices / logistics',ISRG:'Surgical robotics',IDXX:'Pet diagnostics / recurring consumables',RMD:'Sleep apnea / connected respiratory care',SYK:'Orthopedic devices',BSX:'Cardiology / medtech innovation',KTOS:'Defense autonomy',HWM:'Aerospace supply chain',BWXT:'Nuclear / naval reactors',
     XYL:'Water infrastructure',MWA:'Water infrastructure',
     NVDA:'AI compute',AVGO:'AI networking / semis',AMD:'AI compute challenger',ASML:'EUV semiconductor equipment',TSM:'Advanced chip manufacturing',LRCX:'Semicap equipment',KLAC:'Semicap process control',MU:'Memory cycle / AI bandwidth',
     V:'Payments network',MA:'Payments network',CRWD:'Cybersecurity platform',PANW:'Cybersecurity platform',DDOG:'Cloud observability',NET:'Edge cloud / security',NOW:'Enterprise workflow software',SNOW:'Cloud data platform'
@@ -2335,7 +2469,7 @@ function portfolioAction(score,alloc){
   return 'Exit Review';
 }
 function portfolioConfidence(row){
-  const known=!!(RESEARCH_PROFILES[row.symbol]||WATCHLIST.find(x=>x.ticker===row.symbol)||EMERGING_LEADERS.find(x=>x.ticker===row.symbol));
+  const known=!!(RESEARCH_PROFILES[row.symbol]||WATCHLIST.find(x=>x.ticker===row.symbol)||EMERGING_LEADERS.find(x=>x.ticker===row.symbol)||WIDER_MARKET_CANDIDATES.find(x=>x.ticker===row.symbol));
   let score=known?72:48;
   if(row.value>0)score+=8;
   if(row.assetClass==='ETF / Fund')score+=10;
@@ -2346,15 +2480,20 @@ function scoreHolding(row,total){
   if(row.isCash||row.assetClass==='Cash')return {...row,score:null,alloc:total?row.value/total*100:0,sector:'Cash Reserve',theme:'Dry powder / liquidity',action:'Cash Reserve'};
   const profile=researchProfile(row.symbol);
   const defaults=RESEARCH_SCORE_DEFAULTS[row.symbol]||{};
-  const valuationScore=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:defaults.valuation??50));
+  const rawValuation=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:defaults.valuation??50));
+  const valuationGuard=valuationGuardrailFor(row.symbol,profile.type,rawValuation,liveChangeFor(row.symbol));
+  const valuationScore=valuationGuard.score;
   const macroScore=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:defaults.macro??50));
   const opportunity=clamp(profile.opportunity??50);
   const confidence=portfolioConfidence(row);
+  const regime=marketRegimeFit({symbol:row.symbol,category:profile.type,theme:themeFor(row.symbol),quality:profile.fundamental,macro:macroScore});
+  const outcomes=historicalOutcomeScore(row.symbol,themeFor(row.symbol));
   const base=clamp(profile.fundamental*0.23+profile.thesis*0.23+valuationScore*0.17+macroScore*0.12+opportunity*0.17+confidence*0.08);
   const alloc=total?row.value/total*100:0;
-  const concentrationPenalty=alloc>25?12:alloc>15?6:0;
-  const score=Math.round(clamp(base-concentrationPenalty));
-  return {...row,score,alloc,sector:sectorFor(row.symbol),theme:themeFor(row.symbol),action:portfolioAction(score,alloc),fundamental:profile.fundamental,thesis:profile.thesis,valuationScore,macroScore,opportunity,confidence};
+  const target=targetAllocationFor(row.symbol,watchlistSeedFor(row.symbol).source||'Owned');
+  const concentrationPenalty=alloc>=target.max?18:alloc>=target.target?8:alloc>25?12:alloc>15?6:0;
+  const score=Math.round(clamp(base-concentrationPenalty+regime.adjustment+(outcomes.score-50)*0.08));
+  return {...row,score,alloc,sector:sectorFor(row.symbol),theme:themeFor(row.symbol),action:portfolioAction(score,alloc),fundamental:profile.fundamental,thesis:profile.thesis,valuationScore,macroScore,opportunity,confidence,regime,outcomes,valuationGuard,target};
 }
 function exposureRows(scored,key,total){
   const map=new Map();
@@ -2413,11 +2552,13 @@ function renderPortfolioIntelligence(scored,total){
   const cash=scored.filter(r=>r.score===null).reduce((a,r)=>a+r.value,0);
   const mag=magSevenExposure(scored), ai=aiSemiExposure(scored), spec=speculativeExposure(scored);
   const concentration=scored.filter(r=>r.alloc>=10).sort((a,b)=>b.alloc-a.alloc).slice(0,8);
+  const regime=marketRegime();
   const redeployHtml=weak.length?weak.map(r=>`<div class="metric-row"><span><strong>${esc(r.symbol)}</strong> · ${esc(r.action)} · ${r.alloc.toFixed(1)}% · ${esc(r.reason)}</span><strong>${esc(r.destination?.symbol||'CASH')} · ${esc(r.destination?.action||'WAIT')}</strong></div>`).join(''):'<div class="brief-empty">No obvious reduce/redeploy candidates from current scores.</div>';
   const watchHtml=topWatch.length?topWatch.map(w=>`<div class="metric-row"><span><strong>${esc(w.ticker)}</strong> · ${esc(w.source)}</span><strong style="color:${w.color};">${Math.round(w.score)} · ${esc(w.label)}</strong></div>`).join(''):'<div class="brief-empty">No unsaved watchlist recommendation currently outranks saved names.</div>';
   el.innerHTML=`<div class="grid-2">
     <div class="detail-box"><div class="detail-label">REDEPLOYMENT CANDIDATES</div><div class="detail-text">${redeployHtml}</div></div>
     <div class="detail-box"><div class="detail-label">WATCHLIST VS PORTFOLIO</div><div class="detail-text">${watchHtml}</div></div>
+    <div class="detail-box"><div class="detail-label">MARKET REGIME</div><div class="detail-text">${esc(regime.label)}<br>SPY ${Number.isFinite(regime.spy)?pct(regime.spy):'—'} · QQQ ${Number.isFinite(regime.qqq)?pct(regime.qqq):'—'} · IWM ${Number.isFinite(regime.iwm)?pct(regime.iwm):'—'} · TLT ${Number.isFinite(regime.tlt)?pct(regime.tlt):'—'}</div></div>
     <div class="detail-box"><div class="detail-label">CONCENTRATION FLAGS</div><div class="detail-text">
       Mag 7 / mega-cap tech: ${total?(mag/total*100).toFixed(1):'0.0'}%<br>
       AI / semis / cloud: ${total?(ai/total*100).toFixed(1):'0.0'}%<br>
@@ -2440,12 +2581,14 @@ function analyzePortfolio(){
   const strongest=investments.slice(0,5);
   const weakest=[...investments].sort((a,b)=>a.score-b.score).slice(0,5);
   const cashValue=cashRows.reduce((a,r)=>a+r.value,0);
+  const regime=marketRegime();
   const actionRows=investments.map(r=>`<tr><td><strong>${esc(r.symbol)}</strong></td><td>${r.score}</td><td>${esc(r.action)}</td><td>${r.alloc.toFixed(1)}%</td><td>${Math.round(r.fundamental)}</td><td>${Math.round(r.thesis)}</td><td>${Math.round(r.valuationScore)}</td><td>${Math.round(r.macroScore)}</td><td>${Math.round(r.opportunity)}</td><td>${Math.round(r.confidence)}</td><td>${sectorHtml(r.theme)}</td></tr>`).join('');
   box.innerHTML=`<div class="grid-2">
     <div class="detail-box"><div class="detail-label">HIGHEST CONVICTION</div><div class="detail-text">${strongest.length?strongest.map(r=>`${esc(r.symbol)} ${r.score} (${esc(r.action)})`).join('<br>'):'No scored investments yet.'}</div></div>
     <div class="detail-box"><div class="detail-label">WEAKEST HOLDINGS</div><div class="detail-text">${weakest.length?weakest.map(r=>`${esc(r.symbol)} ${r.score} (${esc(r.action)})`).join('<br>'):'No scored investments yet.'}</div></div>
     <div class="detail-box"><div class="detail-label">CONCENTRATION RISK</div><div class="detail-text">${concentration.length?concentration.map(r=>`${esc(r.symbol)} ${r.alloc.toFixed(1)}%`).join('<br>'):'No single position above 10%.'}</div></div>
     <div class="detail-box"><div class="detail-label">CASH / DRY POWDER</div><div class="detail-text">${money(cashValue)} · ${total?(cashValue/total*100).toFixed(1):'0.0'}% of master. Cash-like rows are excluded from Add/Reduce scoring.</div></div>
+    <div class="detail-box"><div class="detail-label">REGIME ADJUSTMENT</div><div class="detail-text">${esc(regime.label)}. Scores now give modest preference to the kinds of businesses that fit today's tape, while still requiring quality and valuation discipline.</div></div>
     <div class="detail-box"><div class="detail-label">NEXT-DOLLAR RULE</div><div class="detail-text">Add to high-score, underweight holdings first. Reduce low-score or oversized positions when better-ranked opportunities exist.</div></div>
   </div>
   <div class="detail-grid">
@@ -2484,6 +2627,7 @@ function collectSnapshot(){
     eventType,
     notes,
     btc:{score:cycle?.score??null,label:cycle?.label||null,price:window._btcPrice||getCycleCache()?.btcPrice||null,inputs:btcInputs},
+    marketRegime:marketRegime(),
     opportunities,
     watchlistScores,
     research,
