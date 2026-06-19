@@ -853,17 +853,36 @@ function switchTab(t){
   if(t==='memory')renderMemorySnapshots();
 }
 
-async function bgCall(ep){
-  const r=await fetch(`/api/bgeometrics?endpoint=${encodeURIComponent(ep)}&limit=100`);
-  if(r.status!==404)addBgUsage(1);
-  if(!r.ok){
-    let msg='BG proxy '+r.status, details=null;
-    try{const d=await r.json(); details=d; if(d?.details?.error?.message)msg=d.details.error.message; else if(d?.error) msg=d.error;}catch(e){}
-    const err=new Error(msg);err.status=r.status;err.details=details;throw err;
+function bgeometricsUrls(ep){
+  const path=`/api/bgeometrics?endpoint=${encodeURIComponent(ep)}&limit=100`;
+  const urls=[path];
+  if(location.protocol==='file:'||/^(127\.0\.0\.1|localhost)$/.test(location.hostname)){
+    urls.push(`https://btcscore.vercel.app${path}`);
   }
-  const data=await r.json();
-  cacheBgEndpoint(ep,data);
-  return data;
+  return urls;
+}
+async function bgCall(ep){
+  const failures=[];
+  for(const url of bgeometricsUrls(ep)){
+    try{
+      const r=await fetch(url);
+      if(r.status!==404)addBgUsage(1);
+      if(!r.ok){
+        let msg='BG proxy '+r.status, details=null;
+        try{const d=await r.json(); details=d; if(d?.details?.error?.message)msg=d.details.error.message; else if(d?.error) msg=d.error;}catch(e){}
+        failures.push(`${url}: ${msg}`);
+        if(r.status===404)continue;
+        const err=new Error(msg);err.status=r.status;err.details=details;throw err;
+      }
+      const data=await r.json();
+      cacheBgEndpoint(ep,data);
+      return data;
+    }catch(e){
+      failures.push(`${url}: ${e.message||e}`);
+      if(!/Failed to fetch|Load failed|NetworkError|404/.test(String(e.message||e)))throw e;
+    }
+  }
+  throw new Error(failures.join(' · '));
 }
 
 function renderCards(vals){
@@ -3200,20 +3219,36 @@ async function showBgDebug(){
       results.push({ep,status:'cached',ok:true,body:cached.payload,cachedAt:cached.updatedAt,value:getMetricVal(id,cached.payload)});
       continue;
     }
-    try{
-      const r=await fetch(`/api/bgeometrics?endpoint=${encodeURIComponent(ep)}&limit=100`);
-      if(r.status!==404)addBgUsage(1);
-      const text=await r.text();
-      let parsed;try{parsed=JSON.parse(text);}catch(e){parsed=text;}
-      if(r.ok)cacheBgEndpoint(ep,parsed);
-      results.push({ep,status:r.status,ok:r.ok,body:parsed});
-    }catch(e){
-      results.push({ep,status:'network error',ok:false,body:e.message});
+    const failures=[];
+    let done=false;
+    for(const url of bgeometricsUrls(ep)){
+      try{
+        const r=await fetch(url);
+        if(r.status!==404)addBgUsage(1);
+        const text=await r.text();
+        let parsed;try{parsed=JSON.parse(text);}catch(e){parsed=text;}
+        if(r.ok){
+          cacheBgEndpoint(ep,parsed);
+          results.push({ep,status:r.status,ok:true,body:parsed,url});
+          done=true;
+          break;
+        }
+        failures.push(`${url}: HTTP ${r.status}`);
+        if(r.status!==404){
+          results.push({ep,status:r.status,ok:false,body:parsed,url});
+          done=true;
+          break;
+        }
+      }catch(e){
+        failures.push(`${url}: ${e.message}`);
+      }
     }
+    if(!done)results.push({ep,status:'network error',ok:false,body:failures.join(' · ')});
   }
   out.innerHTML=results.map(r=>`
     <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #1a1c30;">
       <div style="font-size:12px;color:${r.ok?'#1D9E75':'#E24B4A'};margin-bottom:6px;">${r.ep} — HTTP ${r.status}</div>
+      ${r.url?`<div style="font-size:10px;color:#6a6d9a;margin-bottom:6px;">Route: ${esc(r.url)}</div>`:''}
       ${r.cachedAt?`<div style="font-size:10px;color:#6a6d9a;margin-bottom:6px;">Using cached response from ${new Date(r.cachedAt).toLocaleString()} · parsed value ${r.value??'—'}</div>`:''}
       <pre style="font-size:10px;color:#7a7daa;white-space:pre-wrap;word-break:break-all;line-height:1.5;background:#07080f;padding:10px;border-radius:6px;border:1px solid #1a1c30;">${JSON.stringify(r.body,null,2).slice(0,800)}</pre>
     </div>`).join('');

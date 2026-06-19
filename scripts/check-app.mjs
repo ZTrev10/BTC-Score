@@ -143,6 +143,7 @@ function browserLogicSmoke(script) {
   assert(upSetup.entryRead.label.includes('extended') || upSetup.entryRead.label.includes('stretched'), 'Positive stock moves should warn about entry');
   assert(downSetup.valuationImproved === true, 'Meaningful stock drops can count as valuation improved');
   assert(downSetup.entry >= upSetup.entry, 'Downside entries should score better than upside entries');
+  assert(context.bgeometricsUrls('nupl').some(url => url.includes('btcscore.vercel.app')), 'Local/file BGeometrics calls should fall back to deployed API');
 
   return context.loadScreener()
     .then(() => {
