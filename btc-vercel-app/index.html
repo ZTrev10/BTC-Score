@@ -364,7 +364,7 @@ td strong{color:#c8caee;font-weight:500;}
   <div class="brief-header">
     <div>
       <p class="section-label">WATCHLIST</p>
-      <p style="font-size:11px;color:#3a3d6a;">Best home for the next dollar · ranked by pull-the-trigger score</p>
+      <p style="font-size:11px;color:#3a3d6a;">Quality + entry timing filter · elite companies stay visible until the right entry appears</p>
     </div>
     <button class="btn" onclick="refreshWatchlistScores()">↻ Refresh Scores</button>
   </div>
@@ -381,7 +381,7 @@ td strong{color:#c8caee;font-weight:500;}
 
   <div class="card">
     <p class="section-label">WATCHLIST RECOMMENDATIONS</p>
-    <p style="font-size:11px;color:#3a3d6a;line-height:1.6;margin-bottom:10px;">Names the app would consider adding next, based on Opportunity Feed, Emerging Leaders, and your existing saved watchlist.</p>
+    <p style="font-size:11px;color:#3a3d6a;line-height:1.6;margin-bottom:10px;">Names the app would consider adding next, based on Business Quality, Entry Score, Opportunity Feed, Emerging Leaders, and your existing saved watchlist.</p>
     <div id="watchlist-recommendations"></div>
   </div>
 
@@ -402,9 +402,9 @@ td strong{color:#c8caee;font-weight:500;}
   <div class="card">
     <p class="section-label">SCORING MODEL</p>
     <div class="detail-grid">
-      <div class="detail-box"><div class="detail-label">FUNDAMENTALS</div><div class="detail-text">Business quality, margin durability, balance sheet, moat, and execution.</div></div>
-      <div class="detail-box"><div class="detail-label">TIMING</div><div class="detail-text">Valuation, price pullback, live change when available, and whether the selloff looks temporary.</div></div>
-      <div class="detail-box"><div class="detail-label">CONTEXT</div><div class="detail-text">Macro/theme tailwinds, thesis integrity, confidence, and saved history from prior snapshots.</div></div>
+      <div class="detail-box"><div class="detail-label">BUSINESS QUALITY</div><div class="detail-text">Company quality, moat, growth durability, balance sheet, theme quality, recurring revenue/backlog, and execution.</div></div>
+      <div class="detail-box"><div class="detail-label">ENTRY SCORE</div><div class="detail-text">Current buy setup, pullback quality, valuation improvement, news context, technical extension, and recent move.</div></div>
+      <div class="detail-box"><div class="detail-label">STRATEGY</div><div class="detail-text">Most outputs should be buy starter, buy lower, watch, wait, or speculative small. Avoid is reserved for actual thesis damage.</div></div>
     </div>
   </div>
 
@@ -417,7 +417,7 @@ td strong{color:#c8caee;font-weight:500;}
   <div class="brief-header">
     <div>
       <p class="section-label">OPPORTUNITY RANKING</p>
-      <p style="font-size:11px;color:#3a3d6a;">Primary: Opportunity Score · Secondary: Buy / Watch / Avoid / Too Risky</p>
+      <p style="font-size:11px;color:#3a3d6a;">Primary: quality + entry timing · Labels favor buy starter, add on pullback, watch, wait, or speculative small</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <span style="font-size:10px;color:#3a3d6a;" id="screener-status">Prices load on tab open</span>
@@ -1306,6 +1306,11 @@ function dataHealthRows(){
   const cacheSummary=cacheHasCycleData(cache)?`cache ${ageText(cache?.updatedAt)}`:cache?.updatedAt?`invalid partial cache ${ageText(cache.updatedAt)}`:'no cycle cache';
   const bgError=window._bgLastError?` · Last BG issue: ${window._bgLastError}`:'';
   const priceStatus=Number.isFinite(vals.ma)?(cache?.updatedAt?'LIVE':'CACHED'):(window._btcPriceHistoryStatus||'WAITING');
+  const priceDetail=Number.isFinite(vals.ma)
+    ? `${fmt('ma',vals.ma)} vs 200W MA · BTC ${window._btcPrice?'$'+Math.round(window._btcPrice).toLocaleString():'price cached'}`
+    : window._btcPrice
+      ? `BTC $${Math.round(window._btcPrice).toLocaleString()} loaded · waiting for 200W price-history average`
+      : 'No price-history value yet. CoinGecko/Yahoo fallback will retry.';
   const newsStatus=window._newsStatus||'WAITING';
   const screenerStatus=window._screenerUpdatedAt?'LIVE':'WAITING';
   const memoryRows=memorySnapshots();
@@ -1319,7 +1324,7 @@ function dataHealthRows(){
     {
       title:'BTC Price / 200W MA',
       status:priceStatus,
-      body:Number.isFinite(vals.ma)?`${fmt('ma',vals.ma)} vs 200W MA · BTC ${window._btcPrice?'$'+Math.round(window._btcPrice).toLocaleString():'price cached'}`:'No price-history value yet. CoinGecko/Yahoo fallback will retry.'
+      body:priceDetail
     },
     {
       title:'Live Market Headlines',
@@ -1360,11 +1365,25 @@ function renderDataHealth(message=''){
   if(status)status.textContent=message;
 }
 async function pingAirtableHealth(){
+  const urls=['/api/airtable/list-snapshots?ts='+Date.now()];
+  if(location.protocol==='file:'||/^(127\.0\.0\.1|localhost)$/.test(location.hostname))urls.push('https://btcscore.vercel.app/api/airtable/list-snapshots?ts='+Date.now());
+  const failures=[];
   try{
-    const r=await fetch('/api/airtable/list-snapshots?ts='+Date.now());
-    const d=await r.json();
-    if(!r.ok||!d.ok)throw new Error(d.error||'Airtable unavailable');
-    window._airtableHealth={status:'LIVE',detail:`Connected · ${d.records?.length||0} recent records available`};
+    let d=null, usedUrl='';
+    for(const url of urls){
+      try{
+        const r=await fetch(url);
+        d=await r.json();
+        if(!r.ok||!d.ok)throw new Error(d.error||'Airtable unavailable');
+        usedUrl=url;
+        break;
+      }catch(err){
+        failures.push(`${url}: ${err.message}`);
+        d=null;
+      }
+    }
+    if(!d)throw new Error(failures.join(' · '));
+    window._airtableHealth={status:'LIVE',detail:`Connected · ${d.records?.length||0} recent records available · ${usedUrl.startsWith('https://')?'deployed API':'local API'}`};
   }catch(e){
     window._airtableHealth={status:'FAILED',detail:e.message||'Airtable check failed'};
   }
@@ -1380,8 +1399,10 @@ async function refreshNewsHealthOnly(){
       if(!r.ok)throw new Error('HTTP '+r.status);
       const d=await r.json();
       const count=(d.items||[]).length;
-      window._newsStatus=count?'LIVE':'STALE';
-      window._newsDetail=`${count} headlines · ${url.startsWith('https://')?'deployed API':'local API'} · ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()}`;
+      window._newsStatus=count?(d.fallback?'STALE':'LIVE'):'STALE';
+      window._newsDetail=count
+        ? `${count} headlines · ${url.startsWith('https://')?'deployed API':'local API'} · ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()}${d.fallback?' · latest available context':''}`
+        : `No qualifying fresh headlines · ${url.startsWith('https://')?'deployed API':'local API'} · ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()}`;
       renderDataHealth();
       return d;
     }catch(e){failures.push(`${url}: ${e.message}`);}
@@ -1519,6 +1540,7 @@ function widerMarketCandidateScore(c){
   const valuation=valuationGuard.score;
   const entry=entryQualityScore(move,valuation,c.quality);
   const entryRead=entryQualityRead(move,entry);
+  const business=businessQualityScore({quality:c.quality,thesis:c.thesis,macro:c.macro,confidence:c.confidence});
   const thesisPenalty=news?.thesisRisk==='thesis-breaking'?32:news?.thesisRisk==='verify'?8:0;
   const liveBonus=news?4:0;
   const score=Math.round(clamp(
@@ -1536,19 +1558,22 @@ function widerMarketCandidateScore(c){
     regime.adjustment+
     portfolio.adjustment
   ));
-  let action={label:'WATCH ONLY',color:'#BA7517',copy:'Good business, but not enough edge yet.'};
-  if(score>=84&&Number.isFinite(move)&&move<=-4&&valuation>=66&&entry>=68&&c.confidence>=62)action={label:'RARE SETUP REVIEW',color:'#1D9E75',copy:'Quality, thesis, valuation relief, and price action line up. Verify current news before buying.'};
-  else if(score>=76&&entry>=52)action={label:'HIGH-PRIORITY REVIEW',color:'#639922',copy:'Strong candidate to research now; could deserve a watchlist slot.'};
-  else if(score>=68)action={label:'ADD TO WATCHLIST',color:'#BA7517',copy:'Worth tracking, but wait for a better price or stronger confirmation.'};
-  else if(score<58)action={label:'SKIP',color:'#E24B4A',copy:'Not compelling enough for the watchlist today.'};
-  if(entry<45&&score>=70)action={label:'WATCH ONLY',color:'#BA7517',copy:'High-quality candidate, but the current entry looks stretched.'};
-  return {score,action,price,move,valuation,entry,entryRead,technical,history,outcomes,news,regime,portfolio,valuationGuard};
+  const action=qualityEntryAction({
+    business,
+    entry,
+    thesisDamaged:news?.thesisRisk==='thesis-breaking',
+    speculative:isSpeculativeCandidate(`${c.ticker} ${c.category} ${c.theme} ${c.notes}`,c.quality,c.confidence),
+    hasLiveNews:!!news,
+    downEnough:Number.isFinite(move)&&move<=-4,
+    context:'wider'
+  });
+  return {score,action,price,move,valuation,business,entry,entryRead,technical,history,outcomes,news,regime,portfolio,valuationGuard};
 }
 function watchlistRecommendations(){
   const saved=savedWatchlistSet();
   const opps=rankedOpportunities()
     .filter(o=>!saved.has(o.ticker))
-    .filter(o=>!['AVOID','TOO RISKY'].includes(opportunityActionFor(o).label))
+    .filter(o=>!['AVOID / THESIS DAMAGED'].includes(opportunityActionFor(o).label))
     .slice(0,8)
     .map(o=>{
       const action=opportunityActionFor(o);
@@ -1566,11 +1591,12 @@ function watchlistRecommendations(){
   const emerging=[...EMERGING_LEADERS]
     .filter(e=>!saved.has(e.ticker))
     .sort((a,b)=>b.leader-a.leader)
-    .filter(e=>!['TOO EARLY'].includes(emergingAction(e).label))
+    .filter(e=>emergingAction(e,entryQualityScore(liveChangeFor(e.ticker),52,e.revenue)).label!=='AVOID / THESIS DAMAGED')
     .slice(0,8)
     .map(e=>{
-      const action=emergingAction(e);
-      const score=Math.round(clamp(e.leader*0.28+e.revenue*0.20+e.guidance*0.18+e.narrative*0.20+e.institutional*0.14-(e.retail>75?8:0)));
+      const entry=entryQualityScore(liveChangeFor(e.ticker),52,e.revenue);
+      const action=emergingAction(e,entry);
+      const score=businessQualityScore({quality:e.revenue,thesis:e.leader,macro:e.narrative,confidence:e.institutional});
       return {
         ticker:e.ticker,
         name:e.name,
@@ -1585,7 +1611,7 @@ function watchlistRecommendations(){
   const wider=WIDER_MARKET_CANDIDATES
     .filter(c=>!saved.has(c.ticker))
     .map(c=>({c,setup:widerMarketCandidateScore(c)}))
-    .filter(({setup})=>setup.score>=68&&setup.action.label!=='SKIP')
+    .filter(({setup})=>setup.score>=64&&setup.action.label!=='AVOID / THESIS DAMAGED')
     .sort((a,b)=>b.setup.score-a.setup.score)
     .slice(0,10)
     .map(({c,setup})=>({
@@ -1628,14 +1654,28 @@ async function loadBrief(){
     let r=await fetch('/api/coingecko?path=simple%2Fprice&ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true');
     if(!r.ok)r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true');
     const d=await r.json();btcP=d.bitcoin?.usd;ethP=d['ethereum']?.usd;btcChg=d.bitcoin?.usd_24h_change;ethChg=d['ethereum']?.usd_24h_change;
+    if(Number.isFinite(btcP))window._btcPrice=btcP;
   }catch(e){}
   try{
-    const cgUrl='/api/coingecko?path=coins%2Fbitcoin%2Fmarket_chart&vs_currency=usd&days=1500&interval=daily';
-    let r=await fetch(cgUrl);
-    if(!r.ok)r=await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1500&interval=daily');
-    const d=await r.json();const prices=d.prices;
-    ma200=prices.slice(-1400).map(p=>p[1]).reduce((a,b)=>a+b,0)/Math.min(1400,prices.length);
-  }catch(e){}
+    const history=await fetchBtcHistory();
+    const prices=history.prices;
+    const lastPrice=prices?.length?prices[prices.length-1][1]:null;
+    const maRows=prices.slice(-1400).map(p=>p[1]).filter(Number.isFinite);
+    ma200=maRows.length?maRows.reduce((a,b)=>a+b,0)/maRows.length:null;
+    if(Number.isFinite(lastPrice)&&!Number.isFinite(btcP))btcP=lastPrice;
+    if(Number.isFinite(lastPrice))window._btcPrice=lastPrice;
+    if(Number.isFinite(ma200)&&Number.isFinite(btcP)){
+      const briefMa=((btcP-ma200)/ma200*100);
+      const current=window._cycleScore?.inputs||getCycleCache()?.vals||{};
+      if(!Number.isFinite(Number(current.ma))){
+        const next={...current,ma:briefMa};
+        renderCards(next);updateGauge(next);maybeCacheCycle(next,{source:'brief-price-history-fill'});
+      }
+    }
+    window._btcPriceHistoryStatus='LIVE';
+  }catch(e){
+    if(!window._btcPriceHistoryStatus)window._btcPriceHistoryStatus=window._btcPrice?'STALE':'FAILED';
+  }
   try{await loadScreener();}catch(e){}
   const cs=window._cycleScore||null;
   const rvp=cs?.inputs?.rvp;
@@ -1727,8 +1767,12 @@ async function loadLiveNews(){
     if(!d)throw new Error(failures.join(' · '));
     const buckets=d.buckets||[];
     const items=(d.items||d.news||[]).slice(0,12);
-    if(!buckets.length&&!items.length)throw new Error('no items');
-    if(buckets.length){
+    if(!buckets.length&&!items.length){
+      box.innerHTML=`<div class="news-item">
+        <div class="news-title">No qualifying fresh headlines right now</div>
+        <div class="news-body">The route answered, but the 24h normal / 48h major filter did not find decision-relevant market, BTC, macro, or watchlist headlines.</div>
+      </div>`;
+    }else if(buckets.length){
       box.innerHTML=buckets.map(bucket=>`<div class="news-item">
         <div class="news-tag" style="color:#378ADD;border-color:#234d7a;">${esc(bucket.name)}</div>
         ${(bucket.items||[]).map(n=>`<div style="margin:8px 0 12px;">
@@ -1743,8 +1787,10 @@ async function loadLiveNews(){
       </div>`).join('');
     }
     const sourceLabel=usedUrl.startsWith('https://')?'deployed API':'local API';
-    window._newsStatus='LIVE';
-    window._newsDetail=`${(d.items||[]).length} headlines · ${sourceLabel} · ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()}`;
+    window._newsStatus=(d.items||[]).length?(d.fallback?'STALE':'LIVE'):'STALE';
+    window._newsDetail=(d.items||[]).length
+      ? `${(d.items||[]).length} headlines · ${sourceLabel} · ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()}${d.fallback?' · latest available context':''}`
+      : `No qualifying fresh headlines · ${sourceLabel} · ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()}`;
     renderDataHealth();
     box.insertAdjacentHTML('beforeend',`<p class="brief-policy">${esc(d.policy||'24h normal news; 48h major context')} · Updated ${new Date(d.updatedAt||Date.now()).toLocaleTimeString()} · ${sourceLabel}</p>`);
   }catch(e){
@@ -1888,6 +1934,30 @@ function entryQualityRead(move,score){
   if(score>=48)return {label:'Entry neutral',color:'#BA7517',copy:'No obvious bargain yet.'};
   return {label:'Entry stretched',color:'#E24B4A',copy:'Do not treat this as a fresh opportunity without a pullback.'};
 }
+function businessQualityScore({quality=55,thesis=55,macro=55,confidence=55}={}){
+  return Math.round(clamp(
+    clamp(quality)*0.38+
+    clamp(thesis)*0.34+
+    clamp(macro)*0.14+
+    clamp(confidence)*0.14
+  ));
+}
+function isSpeculativeCandidate(text='',quality=60,confidence=55){
+  return /(speculative|space|fintech|younger public|drone|defense|power generation|volatile|crypto apps|execution)/i.test(String(text)) || quality<72 || confidence<58;
+}
+function qualityEntryAction({business=50,entry=50,thesisDamaged=false,speculative=false,hasLiveNews=true,downEnough=false,context='new'}={}){
+  if(thesisDamaged)return {label:'AVOID / THESIS DAMAGED',color:'#A32D2D',copy:'Avoid only because the business thesis may be impaired. Verify the specific damage before acting.'};
+  if(speculative){
+    if(entry>=64&&business>=62)return {label:'SPECULATIVE SMALL',color:'#BA7517',copy:'Speculative setup: size smaller and require confirmation before adding more.'};
+    return {label:'WATCH CLOSELY',color:'#BA7517',copy:'Promising but speculative. Keep visible, require cleaner evidence or a better entry.'};
+  }
+  if(business>=78&&entry>=68&&hasLiveNews&&downEnough)return {label:'BUY STARTER',color:'#1D9E75',copy:'Thesis intact and entry improving. A small starter position is reasonable if portfolio sizing allows.'};
+  if(business>=78&&entry>=52)return {label:'ADD ON PULLBACK',color:'#639922',copy:'Excellent business. Keep it high on the pullback list and add when price gives you a cleaner entry.'};
+  if(business>=78)return {label:'WAIT / EXTENDED',color:'#BA7517',copy:'Excellent business, entry extended. Keep on pullback list rather than forcing a buy.'};
+  if(business>=68&&entry>=62)return {label:'WATCH CLOSELY',color:'#BA7517',copy:'Promising company and entry is improving, but not enough evidence for a buy-now label.'};
+  if(business>=68)return {label:'ADD ON PULLBACK',color:'#BA7517',copy:'Good company/theme, but the current setup needs a better price or stronger confirmation.'};
+  return {label:'WATCH CLOSELY',color:'#BA7517',copy:'Not a thesis-damaged avoid. Keep researching until business quality and setup are clearer.'};
+}
 function actionFor(score,thesis,confidence){
   if(thesis<50)return {label:'TOO RISKY',color:'#A32D2D'};
   if(score>=80&&confidence>=65)return {label:'BUY',color:'#1D9E75'};
@@ -1955,6 +2025,7 @@ function opportunitySetup(item){
   const newsQuality=item.liveNews?clamp(74-(item.newsSeverity||40)*0.18):48;
   const macro=macroScoreForOpportunity(item);
   const confidence=clamp(item.confidence + (item.liveNews?8:-10) + (downsidePct(item.drop)>=5?5:0) - (upsidePct(item.drop)>=4?6:0) - (risk.temporary?0:8));
+  const business=businessQualityScore({quality,thesis:thesisIntact,macro,confidence});
   const raw=Math.round(
     quality*0.20 +
     thesisIntact*0.20 +
@@ -1969,15 +2040,20 @@ function opportunitySetup(item){
   const score=thesisBreak?Math.min(raw,49):(!item.liveNews?Math.min(raw,74):raw);
   const valuationImproved=Number(item.drop)<0&&valuation>=60;
   const downEnough=Number(item.drop)<=-5;
-  return {score,quality,thesisIntact,valuation,selloff,entry,entryRead,newsQuality,macro,confidence,risk,valuationImproved,downEnough,raw,hasLiveNews:!!item.liveNews};
+  const speculative=isSpeculativeCandidate(`${item.ticker} ${item.category} ${item.reason}`,quality,confidence);
+  return {score,quality,business,thesisIntact,valuation,selloff,entry,entryRead,newsQuality,macro,confidence,risk,valuationImproved,downEnough,raw,hasLiveNews:!!item.liveNews,speculative,thesisDamaged:thesisBreak};
 }
 function opportunityActionFor(item){
   const s=item.setup||opportunitySetup(item);
-  if(s.risk.level==='Thesis-breaking risk'||s.thesisIntact<55)return {label:'AVOID',color:'#A32D2D',copy:'Bad news may impair the thesis. Do not treat this as a simple sale.'};
-  if(s.score>=78&&s.confidence>=62&&s.downEnough&&s.valuationImproved&&s.entry>=68&&s.hasLiveNews)return {label:'BUY',color:'#1D9E75',copy:'Quality business, meaningful selloff, valuation improved, and thesis appears intact.'};
-  if(s.score>=64)return {label:'WATCH',color:'#BA7517',copy:'Interesting setup, but wait for better price, stronger news confirmation, or cleaner thesis evidence.'};
-  if(s.score>=50)return {label:'AVOID',color:'#E24B4A',copy:'Not enough edge yet. Either the selloff is too small, valuation has not improved enough, or confidence is weak.'};
-  return {label:'TOO RISKY',color:'#A32D2D',copy:'Setup quality is too weak for new capital.'};
+  return qualityEntryAction({
+    business:s.business,
+    entry:s.entry,
+    thesisDamaged:s.thesisDamaged,
+    speculative:s.speculative,
+    hasLiveNews:s.hasLiveNews,
+    downEnough:s.downEnough,
+    context:'opportunity'
+  });
 }
 function opportunityScore(item){
   return opportunitySetup(item).score;
@@ -2030,6 +2106,8 @@ function renderOpportunities(){
     const newsMeta=item.liveNews?`${item.liveNews.source||'News'}${Number.isFinite(item.liveNews.ageHours)?' · '+item.liveNews.ageHours.toFixed(1)+'h old':''}${item.liveNews.thesisRisk?' · '+item.liveNews.thesisRisk:''}`:'Placeholder context — waiting for a live down-5% news trigger.';
     const chips=[
       moveHtml(item.drop),
+      `Business ${Math.round(setup.business)}`,
+      `Entry ${Math.round(setup.entry)}`,
       `<span style="color:${setup.entryRead.color};">${esc(setup.entryRead.label)}</span>`,
       esc(setup.risk.level),
       esc(item.liveNews?'Live news linked':'Needs live news')
@@ -2050,6 +2128,7 @@ function renderOpportunities(){
         <div class="detail-grid">
           <div class="detail-box"><div class="detail-label">WHY IS IT DOWN?</div><div class="detail-text">${item.reason}<br><span style="color:#6a6d9a;">${newsMeta}</span></div></div>
           <div class="detail-box"><div class="detail-label">THESIS INTEGRITY</div><div class="detail-text">${Math.round(setup.thesisIntact)}/100 · ${setup.risk.level}. ${setup.thesisIntact>=75?'Thesis appears intact.':setup.thesisIntact>=55?'Some risk; verify before sizing up.':'Potential impairment; avoid or keep small.'}</div></div>
+          <div class="detail-box"><div class="detail-label">BUSINESS QUALITY</div><div class="detail-text">${Math.round(setup.business)}/100 · Company quality, thesis durability, macro/theme fit, and confidence. ${setup.business>=82?'Elite or near-elite business quality.':setup.business>=68?'Promising business quality, keep researching.':'Quality not proven enough yet.'}</div></div>
           <div class="detail-box"><div class="detail-label">ENTRY QUALITY</div><div class="detail-text"><span style="color:${setup.entryRead.color};">${Math.round(setup.entry)}/100 · ${esc(setup.entryRead.label)}</span>. ${esc(setup.entryRead.copy)} Valuation ${Math.round(setup.valuation)}/100 · base valuation ${valuationBaseFor(item)}/100.</div></div>
           <div class="detail-box"><div class="detail-label">SETUP QUALITY</div><div class="detail-text">Quality ${Math.round(setup.quality)} · Selloff ${Math.round(setup.selloff)} · News ${Math.round(setup.newsQuality)} · Macro ${Math.round(setup.macro)} · Confidence ${Math.round(setup.confidence)}.</div></div>
           <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text"><span style="color:${a.color};">${a.label}</span> · ${a.copy}</div></div>
@@ -2070,11 +2149,17 @@ function renderFeatureDecisions(){
   </div>`).join('');
 }
 
-function emergingAction(item){
-  if(item.leader>=88 && item.retail<80)return {label:'CORE WATCH',color:'#1D9E75'};
-  if(item.leader>=80)return {label:'WATCH CLOSELY',color:'#639922'};
-  if(item.leader>=70)return {label:'SPECULATIVE WATCH',color:'#BA7517'};
-  return {label:'TOO EARLY',color:'#E24B4A'};
+function emergingAction(item,entry=null){
+  const business=businessQualityScore({quality:item.revenue,thesis:item.leader,macro:item.narrative,confidence:item.institutional});
+  const speculative=isSpeculativeCandidate(`${item.ticker} ${item.theme} ${item.risk}`,item.revenue,item.institutional);
+  if(business<62)return {label:'WATCH CLOSELY',color:'#BA7517',copy:'Theme is early or evidence is incomplete. Keep researching before sizing.'};
+  if(speculative)return entry!==null&&entry>=62
+    ? {label:'SPECULATIVE SMALL',color:'#BA7517',copy:'High-upside but volatile or execution-sensitive. Size smaller and require confirmation.'}
+    : {label:'WATCH CLOSELY',color:'#BA7517',copy:'Speculative leader candidate. Wait for a cleaner entry or stronger confirmation.'};
+  if(entry!==null&&entry<48)return {label:'WAIT / EXTENDED',color:'#BA7517',copy:'Excellent theme/business, but entry is stretched. Keep on pullback list.'};
+  if(entry!==null&&entry>=68&&business>=82)return {label:'BUY STARTER',color:'#1D9E75',copy:'Leadership quality is high and entry has improved enough for a small starter review.'};
+  if(business>=78)return {label:'ADD ON PULLBACK',color:'#639922',copy:'Strong emerging leader. Prefer buying weakness rather than chasing strength.'};
+  return {label:'WATCH CLOSELY',color:'#BA7517',copy:'Promising, but not enough current evidence or setup.'};
 }
 function renderEmergingLeaders(){
   const rows=[...EMERGING_LEADERS].sort((a,b)=>b.leader-a.leader);
@@ -2087,11 +2172,12 @@ function renderEmergingLeaders(){
     status.textContent=`Last refreshed: ${updated} · ${mode}`;
   }
   el.innerHTML=rows.map(item=>{
-    const a=emergingAction(item);
     const move=liveChangeFor(item.ticker);
     const valuation=valuationGuardrailFor(item.ticker,item.theme,52,move).score;
     const entry=entryQualityScore(move,valuation,item.revenue);
     const entryRead=entryQualityRead(move,entry);
+    const business=businessQualityScore({quality:item.revenue,thesis:item.leader,macro:item.narrative,confidence:item.institutional});
+    const a=emergingAction(item,entry);
     const retailNote=item.retail>=80?'Retail sentiment is hot; require better entry discipline.':item.retail<=45?'Retail attention is low; could be early if fundamentals are improving.':'Retail sentiment is present but not overheated.';
     return `<div class="op-card">
       <div class="op-head" onclick="toggleCard(this)">
@@ -2100,15 +2186,16 @@ function renderEmergingLeaders(){
           <div class="op-sub">${item.theme}${Number.isFinite(move)?` · ${moveHtml(move)}`:''} · <span style="color:${entryRead.color};">${entryRead.label}</span></div>
         </div>
         <div>
-          <div class="op-score" style="color:${a.color};">${item.leader}</div>
+          <div class="op-score" style="color:${a.color};">${business}</div>
           <div class="op-label" style="color:${a.color};">${a.label}</div>
         </div>
       </div>
       <div class="op-details">
         <div class="detail-grid">
-          <div class="detail-box"><div class="detail-label">WHY IT'S EMERGING</div><div class="detail-text">Narrative strength ${item.narrative}/100 · Revenue acceleration ${item.revenue}/100 · Guidance/estimate revision signal ${item.guidance}/100.</div></div>
+          <div class="detail-box"><div class="detail-label">BUSINESS QUALITY</div><div class="detail-text">${business}/100 · Narrative strength ${item.narrative}/100 · Revenue acceleration ${item.revenue}/100 · Guidance/estimate revision signal ${item.guidance}/100.</div></div>
           <div class="detail-box"><div class="detail-label">ENTRY QUALITY</div><div class="detail-text"><span style="color:${entryRead.color};">${entry}/100 · ${entryRead.label}</span>. ${entryRead.copy}<br>${item.entry}</div></div>
           <div class="detail-box"><div class="detail-label">SENTIMENT CHECK</div><div class="detail-text">Retail sentiment ${item.retail}/100. ${retailNote} Institutional signal ${item.institutional}/100.</div></div>
+          <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text"><span style="color:${a.color};">${a.label}</span> · ${a.copy}</div></div>
           <div class="detail-box"><div class="detail-label">WHAT COULD BREAK IT</div><div class="detail-text">${item.risk}</div></div>
         </div>
         <div class="research-actions">
@@ -2224,6 +2311,7 @@ function watchlistScore(item){
   const quality=clamp(profile.fundamental??opp?.quality??emerging?.revenue??wider?.quality??55);
   const thesis=clamp(profile.thesis??opp?.thesis??emerging?.leader??wider?.thesis??50);
   const confidence=clamp(opp?.confidence??emerging?.institutional??wider?.confidence??55);
+  const business=businessQualityScore({quality,thesis,macro,confidence});
   const technical=move<0?clamp(55+Math.min(30,Math.abs(move)*4)):clamp(48-Math.min(18,Math.abs(move)*1.5));
   const history=historyScoreFor(item.ticker,item.theme||profile.type);
   const outcomes=historicalOutcomeScore(item.ticker,item.theme||profile.type);
@@ -2242,11 +2330,18 @@ function watchlistScore(item){
     regime.adjustment +
     portfolio.adjustment
   ));
-  const action=researchDecision(score,'new');
   const thesisBreak=thesis<50 || quality<50;
   const adjusted=thesisBreak?Math.min(score,49):score;
-  const adjustedAction=thesisBreak?{label:'DO NOT ADD',color:'#A32D2D',copy:'Quality or thesis score is too weak. Do more research before committing capital.'}:action;
-  return {score:adjusted,action:adjustedAction,price,move,quality,thesis,valuation,entry,entryRead,macro,opportunity,technical,history,outcomes,confidence,regime,portfolio,valuationGuard};
+  const adjustedAction=qualityEntryAction({
+    business,
+    entry,
+    thesisDamaged:thesisBreak,
+    speculative:isSpeculativeCandidate(`${item.ticker} ${item.category||profile.type} ${item.theme||profile.type}`,quality,confidence),
+    hasLiveNews:!!liveNewsFor(item.ticker),
+    downEnough:Number.isFinite(move)&&move<=-4,
+    context:'watchlist'
+  });
+  return {score:adjusted,action:adjustedAction,price,move,quality,business,thesis,valuation,entry,entryRead,macro,opportunity,technical,history,outcomes,confidence,regime,portfolio,valuationGuard};
 }
 function wideBaseOpportunity(item,move){
   const technical=Number.isFinite(move)&&move<0?Math.min(12,Math.abs(move)*1.4):0;
@@ -2292,17 +2387,20 @@ function candidateBaseScore(symbol,source,item=null){
   const profile=researchProfile(s);
   const valuation=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:RESEARCH_SCORE_DEFAULTS[s]?.valuation??50));
   const macro=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:RESEARCH_SCORE_DEFAULTS[s]?.macro??50));
+  const move=liveChangeFor(s);
+  const entry=entryQualityScore(move,valuation,profile.fundamental);
+  const business=businessQualityScore({quality:profile.fundamental,thesis:profile.thesis,macro,confidence:profile.confidence||55});
   const profileScore=Math.round(clamp(profile.fundamental*0.25+profile.thesis*0.25+valuation*0.18+macro*0.12+(profile.opportunity||50)*0.20));
-  const action=researchDecision(profileScore,'new');
-  return {score:profileScore,action,price:livePriceFor(s),move:liveChangeFor(s),reason:profile.summary||'Owned position scored from local research profile.'};
+  const action=researchDecision(profileScore,'new',{business,entry,thesisDamaged:profile.thesis<50||profile.fundamental<50,speculative:isSpeculativeCandidate(`${profile.ticker} ${profile.type} ${profile.risks}`,profile.fundamental,profile.confidence||55),hasLiveNews:false,downEnough:Number.isFinite(move)&&move<=-4});
+  return {score:profileScore,action,price:livePriceFor(s),move,business,entry,entryRead:entryQualityRead(move,entry),reason:profile.summary||'Owned position scored from local research profile.'};
 }
 function nextDollarAction(score,currentAlloc,target,max){
   if(currentAlloc>=max)return {label:'DO NOT ADD',color:'#A32D2D',copy:'Already above max sleeve size. New money should go elsewhere unless target weights change.'};
-  if(currentAlloc>=target&&score<82)return {label:'WAIT',color:'#BA7517',copy:'Good enough to own, but not the best next dollar while already near target.'};
-  if(score>=82)return {label:'BEST ADD',color:'#1D9E75',copy:'Strong candidate for new capital.'};
-  if(score>=72)return {label:'ADD',color:'#639922',copy:'Reasonable next-dollar candidate, especially if underweight.'};
-  if(score>=60)return {label:'WATCH',color:'#BA7517',copy:'Keep on deck, but require better price or clearer signal.'};
-  return {label:'WAIT',color:'#E24B4A',copy:'Not attractive enough for new money today.'};
+  if(currentAlloc>=target&&score<82)return {label:'WAIT / EXTENDED',color:'#BA7517',copy:'Good enough to own, but not the best next dollar while already near target.'};
+  if(score>=84)return {label:'BUY STARTER',color:'#1D9E75',copy:'Strong candidate for a small new-capital starter, subject to sizing.'};
+  if(score>=74)return {label:'ADD ON PULLBACK',color:'#639922',copy:'Reasonable next-dollar candidate, especially if underweight or entry improves.'};
+  if(score>=60)return {label:'WATCH CLOSELY',color:'#BA7517',copy:'Keep on deck, but require better price or clearer signal.'};
+  return {label:'WAIT / EXTENDED',color:'#BA7517',copy:'Not the best home for new money today, but not thesis-damaged.'};
 }
 function buildNextDollarCandidates(){
   const {map,total,rows}=holdingAllocMap();
@@ -2346,7 +2444,7 @@ function buildNextDollarCandidates(){
       score:finalScore,
       baseScore:base.score,
       action,
-      reason:[base.reason||base.action?.copy||'Ranked from local score inputs.',base.entryRead?`Entry: ${base.entryRead.label}. ${base.entryRead.copy}`:'',base.regime?.note,base.portfolio?.note,base.valuationGuard?.note].filter(Boolean).join(' '),
+      reason:[base.reason||base.action?.copy||'Ranked from local score inputs.',Number.isFinite(base.business)?`Business Quality ${Math.round(base.business)}/100.`:'',base.entryRead?`Entry: ${base.entryRead.label}. ${base.entryRead.copy}`:'',base.regime?.note,base.portfolio?.note,base.valuationGuard?.note].filter(Boolean).join(' '),
       currentAlloc:alloc,
       currentValue:value,
       target:target.target,
@@ -2363,7 +2461,7 @@ function buildNextDollarCandidates(){
   if(indexCandidate){
     candidates.forEach(c=>{
       if(assetClass(c.symbol)==='Stock'&&c.action.label.includes('ADD')&&c.score<indexCandidate.score+6){
-        c.action={label:'WATCH',color:'#BA7517',copy:'Does not clear the index hurdle by enough today. Keep researching or wait for a better entry.'};
+        c.action={label:'WATCH CLOSELY',color:'#BA7517',copy:'Does not clear the index hurdle by enough today. Keep researching or wait for a better entry.'};
       }
     });
   }
@@ -2401,7 +2499,7 @@ function renderWatchlist(){
     const added=item.addedAt?new Date(item.addedAt).toLocaleDateString():'starter';
     const stored=userWatchlist().some(r=>r.ticker===item.ticker);
     const scores=[
-      ['Fundamentals',score.quality],['Thesis',score.thesis],['Valuation',score.valuation],
+      ['Business',score.business],['Fundamentals',score.quality],['Thesis',score.thesis],['Valuation',score.valuation],
       ['Entry',score.entry],['Macro',score.macro],['Technical',score.technical],['History',score.history.score]
     ].map(([label,val])=>`<div class="research-score"><div class="detail-label">${label.toUpperCase()}</div><div class="research-score-num" style="color:${col(val)};">${Math.round(val)}</div></div>`).join('');
     return `<div class="op-card">
@@ -2418,7 +2516,7 @@ function renderWatchlist(){
       <div class="op-details">
         <div class="research-score-grid">${scores}</div>
         <div class="detail-grid">
-          <div class="detail-box"><div class="detail-label">PULL-TRIGGER READ</div><div class="detail-text">${esc(score.action.copy)} Entry ${score.entry}/100 · ${esc(score.entryRead.label)}. Opportunity score ${score.opportunity}/100 · confidence ${score.confidence}/100.</div></div>
+          <div class="detail-box"><div class="detail-label">PULL-TRIGGER READ</div><div class="detail-text">${esc(score.action.copy)} Business Quality ${score.business}/100 · Entry ${score.entry}/100 · ${esc(score.entryRead.label)}. Opportunity score ${score.opportunity}/100 · confidence ${score.confidence}/100.</div></div>
           <div class="detail-box"><div class="detail-label">WHY IT'S HERE</div><div class="detail-text">${esc(item.notes||'No note yet.')}</div></div>
           <div class="detail-box"><div class="detail-label">THEME / MACRO</div><div class="detail-text">${esc(item.theme||themeFor(item.ticker))}</div></div>
           <div class="detail-box"><div class="detail-label">HISTORY / OUTCOMES</div><div class="detail-text">${esc(score.history.label)} · ${esc(score.outcomes?.label||'No outcome history yet')}. Saved snapshots make this smarter over time.</div></div>
@@ -2460,18 +2558,26 @@ function researchProfile(symbol){
   if(wider)return {ticker:sym,name:wider.name,type:wider.category,fundamental:wider.quality,thesis:wider.thesis,valuationScore:wider.valuation,macroScore:wider.macro,opportunity:wideBaseOpportunity(wider,liveChangeFor(sym)),summary:`Wider-market candidate tied to ${wider.theme}.`,bull:'The business quality and theme fit are strong enough to monitor beyond the usual tech-heavy list.',bear:'Even high-quality wider-market names can be bad buys if valuation is stretched or the sector thesis weakens.',valuationText:wider.notes,macroText:`Macro fit ${wider.macro}/100. ${marketRegimeFit({symbol:sym,category:wider.category,theme:wider.theme,quality:wider.quality,macro:wider.macro}).note}`,risks:'Verify current fundamentals, valuation, balance sheet, and news before committing capital.'};
   return {ticker:sym,name:sym,type:'Unclassified ticker',fundamental:55,thesis:50,valuationScore:50,macroScore:50,opportunity:45,summary:'No local profile yet. V1 can still create a research shell, but this needs manual notes or future fundamentals integration.',bull:'Unknown until company quality, growth, margins, balance sheet, and moat are researched.',bear:'Unknown businesses should not receive new capital without a clear thesis and valuation work.',valuationText:'No valuation data connected yet.',macroText:'Macro exposure unknown.',risks:'Missing research profile. Add notes before making a decision.'};
 }
-function researchDecision(score,context){
-  if(score>=82)return {label:'BUY TODAY',color:'#1D9E75',copy:'Strong next-dollar candidate if position size and valuation discipline are acceptable.'};
-  if(score>=70)return {label:'ADD / ACCUMULATE',color:'#639922',copy:'Good candidate, especially on weakness or if underweight.'};
-  if(score>=58)return {label:context==='owned'?'KEEP / HOLD':'WATCHLIST',color:'#BA7517',copy:'Interesting, but wait for better price, clearer evidence, or stronger thesis confirmation.'};
-  if(score>=45)return {label:context==='sell'?'REDUCE CANDIDATE':'HOLD OFF',color:'#E24B4A',copy:'Not the best home for the next dollar right now.'};
-  return {label:'AVOID / EXIT REVIEW',color:'#A32D2D',copy:'Weak score. Require a major thesis change before adding capital.'};
+function researchDecision(score,context,meta={}){
+  if(context==='owned'&&score>=58)return {label:'KEEP / HOLD',color:'#BA7517',copy:'Good enough to keep, but new dollars still need a quality-plus-entry check.'};
+  if(context==='sell'&&score<45)return {label:'REDUCE CANDIDATE',color:'#E24B4A',copy:'Review for redeployment, but reserve true avoid language for thesis damage.'};
+  return qualityEntryAction({
+    business:meta.business??score,
+    entry:meta.entry??score,
+    thesisDamaged:!!meta.thesisDamaged,
+    speculative:!!meta.speculative,
+    hasLiveNews:meta.hasLiveNews!==false,
+    downEnough:!!meta.downEnough,
+    context
+  });
 }
 function researchFromApi(d){
   const context=document.getElementById('research-context')?.value||'new';
   const horizon=document.getElementById('research-horizon')?.value||'long';
   const notes=document.getElementById('research-notes')?.value||'';
   const liveDrop=d.quote?.changePercent??null;
+  const entry=entryQualityScore(liveDrop,d.valuationScore,d.fundamental);
+  const business=businessQualityScore({quality:d.fundamental,thesis:d.thesis,macro:d.macroScore,confidence:d.confidence||55});
   const dropBoost=liveDrop<0?Math.min(10,Math.abs(liveDrop)*1.2):Math.max(-6,-Math.abs(liveDrop||0)*0.6);
   const score=Math.round(clamp(
     d.fundamental*0.25 +
@@ -2482,7 +2588,8 @@ function researchFromApi(d){
     (d.confidence||55)*0.08 +
     dropBoost
   ));
-  const decision=researchDecision(score,context);
+  const thesisDamaged=d.thesis<50||d.fundamental<50||(d.news||[]).some(n=>n.thesisRisk==='thesis-breaking');
+  const decision=researchDecision(score,context,{business,entry,thesisDamaged,speculative:isSpeculativeCandidate(`${d.symbol} ${d.type||''} ${d.risks||''}`,d.fundamental,d.confidence||55),hasLiveNews:(d.news||[]).length>0,downEnough:Number.isFinite(liveDrop)&&liveDrop<=-4});
   const bestAlt=rankedOpportunities().find(x=>x.ticker!==d.symbol);
   return {
     ticker:d.symbol,
@@ -2494,6 +2601,9 @@ function researchFromApi(d){
     macroScore:d.macroScore,
     opportunity:d.opportunity,
     confidence:d.confidence,
+    business,
+    entry,
+    entryRead:entryQualityRead(liveDrop,entry),
     summary:d.summary,
     bull:d.bull,
     bear:d.bear,
@@ -2530,10 +2640,13 @@ function buildResearch(symbol){
   const horizon=document.getElementById('research-horizon')?.value||'long';
   const dropBoost=liveDrop<0?Math.min(12,Math.abs(liveDrop)*1.4):Math.max(-8,-Math.abs(liveDrop||0)*0.8);
   const specPenalty=horizon==='spec'?0:profile.fundamental<60?-8:0;
+  const entry=entryQualityScore(liveDrop,valuationScore,profile.fundamental);
+  const business=businessQualityScore({quality:profile.fundamental,thesis:profile.thesis,macro:macroScore,confidence:profile.confidence||55});
   const score=Math.round(clamp(profile.fundamental*0.25+profile.thesis*0.25+valuationScore*0.18+macroScore*0.12+profile.opportunity*0.20+dropBoost+specPenalty));
-  const decision=researchDecision(score,context);
+  const thesisDamaged=profile.thesis<50||profile.fundamental<50;
+  const decision=researchDecision(score,context,{business,entry,thesisDamaged,speculative:horizon==='spec'||isSpeculativeCandidate(`${profile.ticker} ${profile.type} ${profile.risks}`,profile.fundamental,profile.confidence||55),hasLiveNews:false,downEnough:Number.isFinite(liveDrop)&&liveDrop<=-4});
   const bestAlt=rankedOpportunities().find(x=>x.ticker!==profile.ticker);
-  return {...profile,valuationScore,macroScore,valuationText,macroText,score,decision,price,liveDrop,notes,context,horizon,bestAlt,createdAt:new Date().toISOString()};
+  return {...profile,valuationScore,macroScore,valuationText,macroText,business,entry,entryRead:entryQualityRead(liveDrop,entry),score,decision,price,liveDrop,notes,context,horizon,bestAlt,createdAt:new Date().toISOString()};
 }
 async function fetchLiveResearch(symbol){
   const r=await fetch('/api/research?symbol='+encodeURIComponent(symbol)+'&ts='+Date.now());
@@ -2542,7 +2655,7 @@ async function fetchLiveResearch(symbol){
 }
 function renderResearchCard(r){
   const scores=[
-    ['Fundamental',r.fundamental],['Thesis',r.thesis],['Valuation',r.valuationScore],['Macro',r.macroScore],['Opportunity',r.opportunity]
+    ['Business',r.business??businessQualityScore({quality:r.fundamental,thesis:r.thesis,macro:r.macroScore,confidence:r.confidence||55})],['Entry',r.entry??entryQualityScore(r.liveDrop,r.valuationScore,r.fundamental)],['Fundamental',r.fundamental],['Thesis',r.thesis],['Valuation',r.valuationScore],['Macro',r.macroScore],['Opportunity',r.opportunity]
   ].map(([label,val])=>`<div class="research-score"><div class="detail-label">${label.toUpperCase()}</div><div class="research-score-num" style="color:${col(val)};">${Math.round(val)}</div></div>`).join('');
   const priceLine=r.price?priceHtml(r.price):'<span class="price-text">Price unavailable</span>';
   const moveLine=r.liveDrop!=null?`${moveHtml(r.liveDrop)} recent move`:'<span class="move-flat">No live move available</span>';
@@ -2557,7 +2670,7 @@ function renderResearchCard(r){
       <div>
         <div style="font-size:13px;color:${r.decision.color};letter-spacing:0.12em;margin-bottom:4px;">${esc(r.ticker)} · ${r.decision.label}</div>
         <div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${esc(r.name)} · ${sectorHtml(r.type)} · ${priceLine} · ${moveLine}</div>
-        <div style="font-size:11px;color:#7a7daa;margin-top:4px;line-height:1.6;">${esc(r.decision.copy)}</div>
+        <div style="font-size:11px;color:#7a7daa;margin-top:4px;line-height:1.6;">${esc(r.decision.copy)} ${r.entryRead?`Entry: ${esc(r.entryRead.label)}.`:''}</div>
       </div>
     </div>
     <div class="research-score-grid">${scores}</div>
@@ -3332,6 +3445,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(loading)loading.style.display='none';
     if(content){content.style.display='block';content.innerHTML='<div class="card"><p class="section-label">DAILY BRIEF</p><p style="font-size:12px;color:#5a5d8a;line-height:1.7;">Brief could not load. Check the browser console or API connection.</p></div>';}
   }
+  setTimeout(()=>{try{pingAirtableHealth();}catch(e){}},4000);
   setTimeout(()=>{try{autoSaveDailySnapshot();}catch(e){}},15000);
 });
 </script>

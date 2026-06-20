@@ -144,12 +144,24 @@ export default async function handler(req, res) {
       all.push(...extractItems(xml, bucket));
     }
 
-    const fresh = dedupe(all)
+    const deduped = dedupe(all);
+    let fallback = false;
+    let fresh = deduped
       .filter(item => item.ageHours <= 24 || (item.bigNews && item.decisionRelevant && item.ageHours <= 48))
       .sort((a, b) => {
         if (a.bigNews !== b.bigNews) return a.bigNews ? -1 : 1;
         return a.ageHours - b.ageHours;
       });
+    if (!fresh.length) {
+      fallback = true;
+      fresh = deduped
+        .filter(item => item.decisionRelevant || item.bigNews)
+        .sort((a, b) => {
+          if (a.bigNews !== b.bigNews) return a.bigNews ? -1 : 1;
+          return a.ageHours - b.ageHours;
+        })
+        .slice(0, 18);
+    }
 
     const byBucket = buckets.map(bucket => ({
       name: bucket.name,
@@ -161,7 +173,10 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     return res.status(200).json({
       updatedAt: new Date().toISOString(),
-      policy: '24h normal news; 48h major context only if still decision-relevant',
+      policy: fallback
+        ? 'No qualifying fresh headlines found; showing latest available decision-relevant context'
+        : '24h normal news; 48h major context only if still decision-relevant',
+      fallback,
       buckets: byBucket,
       items: byBucket.flatMap(bucket => bucket.items).slice(0, 24)
     });
