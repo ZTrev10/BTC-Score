@@ -421,7 +421,7 @@ td strong{color:#c8caee;font-weight:500;}
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <span style="font-size:10px;color:#3a3d6a;" id="screener-status">Prices load on tab open</span>
-      <button class="btn" onclick="loadScreener()">↻ Refresh Prices</button>
+      <button class="btn" onclick="loadScreener(true)">↻ Refresh Prices</button>
     </div>
   </div>
 
@@ -1312,7 +1312,7 @@ function dataHealthRows(){
       ? `BTC $${Math.round(window._btcPrice).toLocaleString()} loaded · waiting for 200W price-history average`
       : 'No price-history value yet. CoinGecko/Yahoo fallback will retry.';
   const newsStatus=window._newsStatus||'WAITING';
-  const screenerStatus=window._screenerUpdatedAt?'LIVE':'WAITING';
+  const screenerStatus=window._screenerUpdatedAt?(window._screenerStale?'STALE':'LIVE'):'WAITING';
   const memoryRows=memorySnapshots();
   const airtable=window._airtableHealth||{status:'WAITING',detail:'Airtable not checked this session.'};
   return [
@@ -1334,7 +1334,7 @@ function dataHealthRows(){
     {
       title:'Market Prices / Screener',
       status:screenerStatus,
-      body:window._screenerUpdatedAt?`Updated ${new Date(window._screenerUpdatedAt).toLocaleTimeString()} · ${Object.keys(window._screenerData||{}).length} symbols loaded`:'No live screener pull yet.'
+      body:window._screenerUpdatedAt?`Updated ${new Date(window._screenerUpdatedAt).toLocaleTimeString()} · ${Object.keys(window._screenerData||{}).length} symbols loaded${window._screenerSource?' · '+window._screenerSource:''}${window._screenerOldestQuote?' · oldest quote '+ageText(Date.parse(window._screenerOldestQuote)):''}`:'No live screener pull yet.'
     },
     {
       title:'Airtable Memory',
@@ -2402,6 +2402,26 @@ function nextDollarAction(score,currentAlloc,target,max){
   if(score>=60)return {label:'WATCH CLOSELY',color:'#BA7517',copy:'Keep on deck, but require better price or clearer signal.'};
   return {label:'WAIT / EXTENDED',color:'#BA7517',copy:'Not the best home for new money today, but not thesis-damaged.'};
 }
+function actionRank(label=''){
+  if(label==='AVOID / THESIS DAMAGED'||label==='DO NOT ADD')return 0;
+  if(label==='WAIT / EXTENDED'||label==='DCA ONLY'||label==='WAIT IN CASH'||label==='LOW PRIORITY')return 1;
+  if(label==='WATCH CLOSELY')return 2;
+  if(label==='SPECULATIVE SMALL')return 3;
+  if(label==='ADD ON PULLBACK'||label==='ADD BTC'||label==='SMALL ETH ADD'||label==='CORE ADD')return 4;
+  if(label==='BUY STARTER'||label==='PRIORITIZE BTC')return 5;
+  return 2;
+}
+function capActionByBase(nextAction,baseAction,entry=null){
+  if(!baseAction)return nextAction;
+  let capped=nextAction;
+  const entryValue=Number(entry);
+  const maxRank=Number.isFinite(entryValue)&&entryValue<52?Math.min(actionRank(baseAction.label),2):actionRank(baseAction.label);
+  if(actionRank(nextAction.label)>maxRank)capped=baseAction;
+  if(Number.isFinite(entryValue)&&entryValue<52&&actionRank(capped.label)>2){
+    capped={label:'WATCH CLOSELY',color:'#BA7517',copy:'Allocation is underweight, but entry is not strong enough for a buy-starter label yet.'};
+  }
+  return capped;
+}
 function buildNextDollarCandidates(){
   const {map,total,rows}=holdingAllocMap();
   const entries=new Map();
@@ -2435,8 +2455,10 @@ function buildNextDollarCandidates(){
     const singleStock=assetClass(e.symbol)==='Stock';
     const entryPenalty=singleStock&&base.entry!==undefined&&base.entry<50?Math.round((50-base.entry)*0.45):0;
     const finalScore=Math.round(clamp(base.score+underBoost-concentrationPenalty-unknownPenalty-entryPenalty));
-    const action=nextDollarAction(finalScore,alloc,target.target,target.max);
+    const nextAction=nextDollarAction(finalScore,alloc,target.target,target.max);
+    const action=singleStock?capActionByBase(nextAction,base.action,base.entry):nextAction;
     const price=base.price??map[e.symbol]?.price??null;
+    const allocationNote=underBoost>2?'Underweight boosts priority, but does not override entry quality.':'';
     return {
       symbol:e.symbol,
       name:watchlistSeedFor(e.symbol).name,
@@ -2444,7 +2466,7 @@ function buildNextDollarCandidates(){
       score:finalScore,
       baseScore:base.score,
       action,
-      reason:[base.reason||base.action?.copy||'Ranked from local score inputs.',Number.isFinite(base.business)?`Business Quality ${Math.round(base.business)}/100.`:'',base.entryRead?`Entry: ${base.entryRead.label}. ${base.entryRead.copy}`:'',base.regime?.note,base.portfolio?.note,base.valuationGuard?.note].filter(Boolean).join(' '),
+      reason:[base.action?.copy||base.reason||'Ranked from local score inputs.',allocationNote,Number.isFinite(base.business)?`Business Quality ${Math.round(base.business)}/100.`:'',base.entryRead?`Entry: ${base.entryRead.label}. ${base.entryRead.copy}`:'',base.regime?.note,base.portfolio?.note,base.valuationGuard?.note].filter(Boolean).join(' '),
       currentAlloc:alloc,
       currentValue:value,
       target:target.target,
@@ -3375,22 +3397,27 @@ window._opportunityNews = {}; // symbol → recent headline context
 let _screenerLoading = false;
 let _screenerPromise = null;
 
-async function loadScreener(){
-  if(_screenerLoading&&_screenerPromise)return _screenerPromise;
+async function loadScreener(force=false){
+  if(_screenerLoading&&_screenerPromise&&!force)return _screenerPromise;
   _screenerLoading=true;
   const statusEl=document.getElementById('screener-status');
   const watchStatus=document.getElementById('watchlist-status');
   if(statusEl)statusEl.textContent='Loading live prices…';
   if(watchStatus&&document.getElementById('tab-watchlist')?.classList.contains('active'))watchStatus.textContent='Loading live prices and news...';
   _screenerPromise=(async()=>{
-    const r=await fetch('/api/screener?ts='+Date.now());
+    const r=await fetch('/api/screener?ts='+Date.now()+(force?'&force=1':''));
     if(!r.ok)throw new Error('screener '+r.status);
     const d=await r.json();
     (d.quotes||[]).forEach(q=>{ window._screenerData[q.symbol]=q; });
     window._opportunityNews=d.newsBySymbol||{};
     window._screenerUpdatedAt=d.updatedAt||new Date().toISOString();
+    window._screenerSource=d.source||'market data API';
+    const quoteTimes=(d.quotes||[]).map(q=>Date.parse(q.quoteTime)).filter(Number.isFinite).sort((a,b)=>a-b);
+    window._screenerOldestQuote=quoteTimes.length?new Date(quoteTimes[0]).toISOString():null;
+    window._screenerStale=quoteTimes.length?Date.now()-quoteTimes[0]>30*60000:false;
     window._screenerLastError='';
-    if(statusEl)statusEl.textContent='Prices updated '+new Date(d.updatedAt).toLocaleTimeString();
+    const quoteNote=window._screenerOldestQuote?` · quote ${ageText(Date.parse(window._screenerOldestQuote))}`:'';
+    if(statusEl)statusEl.textContent=`Prices updated ${new Date(d.updatedAt).toLocaleTimeString()}${quoteNote}`;
     if(watchStatus&&document.getElementById('tab-watchlist')?.classList.contains('active'))watchStatus.textContent='Live market data updated '+new Date(d.updatedAt).toLocaleTimeString();
     renderOpportunities();
     renderEmergingLeaders();

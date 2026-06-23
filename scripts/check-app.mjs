@@ -146,9 +146,15 @@ function browserLogicSmoke(script) {
   const greatButExtended = context.qualityEntryAction({ business: 95, entry: 35, thesisDamaged: false, speculative: false });
   const damaged = context.qualityEntryAction({ business: 85, entry: 70, thesisDamaged: true, speculative: false });
   const improving = context.qualityEntryAction({ business: 88, entry: 72, thesisDamaged: false, speculative: false, hasLiveNews: true, downEnough: true });
+  const cappedNextDollar = context.capActionByBase(
+    { label: 'BUY STARTER', color: '#1D9E75', copy: 'boosted by underweight allocation' },
+    { label: 'ADD ON PULLBACK', color: '#639922', copy: 'entry is not clean enough yet' },
+    50
+  );
   assert(greatButExtended.label === 'WAIT / EXTENDED', 'Great business with poor entry should wait, not avoid');
   assert(damaged.label === 'AVOID / THESIS DAMAGED', 'Avoid should be reserved for thesis damage');
   assert(improving.label === 'BUY STARTER', 'High quality with improved entry should become buy starter');
+  assert(cappedNextDollar.label !== 'BUY STARTER', 'Best Next Dollar should not promote weak/neutral entry into buy starter');
   assert(context.bgeometricsUrls('nupl').some(url => url.includes('btcscore.vercel.app')), 'Local/file BGeometrics calls should fall back to deployed API');
 
   return context.loadScreener()

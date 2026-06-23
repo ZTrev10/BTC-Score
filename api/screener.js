@@ -117,6 +117,36 @@ async function fetchSymbolNews(symbol, name) {
   return extractNewsItems(await upstream.text(), symbol);
 }
 
+async function fetchYahooQuoteBatch(symbols) {
+  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(','))}`;
+  const upstream = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TrevorMarketApp/1.0)' }
+  });
+  if (!upstream.ok) throw new Error(`quote ${upstream.status}`);
+  const raw = await upstream.json();
+  return new Map((raw?.quoteResponse?.result || []).map(row => [String(row.symbol || '').toUpperCase(), row]));
+}
+
+function normalizeQuote(row, symbol) {
+  if (!row) return null;
+  const price = Number(row.regularMarketPrice);
+  const changePercent = Number(row.regularMarketChangePercent);
+  const marketTime = Number(row.regularMarketTime);
+  if (!Number.isFinite(price)) return null;
+  return {
+    symbol,
+    name: row.shortName || row.longName || COMPANY_HINTS[symbol] || symbol,
+    price,
+    changePercent: Number.isFinite(changePercent) ? changePercent : null,
+    prevClose: Number(row.regularMarketPreviousClose) || null,
+    volume: Number(row.regularMarketVolume) || null,
+    dayLow: Number(row.regularMarketDayLow) || null,
+    dayHigh: Number(row.regularMarketDayHigh) || null,
+    quoteTime: Number.isFinite(marketTime) ? new Date(marketTime * 1000).toISOString() : null,
+    source: 'yahoo-quote'
+  };
+}
+
 async function fetchChartQuote(symbol) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d`;
   const upstream = await fetch(url, {
@@ -138,7 +168,9 @@ async function fetchChartQuote(symbol) {
     prevClose,
     volume: meta.regularMarketVolume ?? quote.volume?.at?.(-1) ?? null,
     dayLow: meta.regularMarketDayLow ?? quote.low?.at?.(-1) ?? null,
-    dayHigh: meta.regularMarketDayHigh ?? quote.high?.at?.(-1) ?? null
+    dayHigh: meta.regularMarketDayHigh ?? quote.high?.at?.(-1) ?? null,
+    quoteTime: meta.regularMarketTime ? new Date(Number(meta.regularMarketTime) * 1000).toISOString() : null,
+    source: 'yahoo-chart'
   };
 }
 
@@ -153,7 +185,15 @@ export default async function handler(req, res) {
     : DEFAULT_SYMBOLS;
 
   try {
-    const quotes = (await Promise.all(symbols.map(fetchChartQuote))).filter(Boolean);
+    let quoteMap = new Map();
+    try {
+      quoteMap = await fetchYahooQuoteBatch(symbols);
+    } catch {
+      quoteMap = new Map();
+    }
+    const quotes = (await Promise.all(symbols.map(async symbol => {
+      return normalizeQuote(quoteMap.get(symbol), symbol) || await fetchChartQuote(symbol);
+    }))).filter(Boolean);
 
     const newsBySymbol = {};
     const candidates = quotes
@@ -167,8 +207,8 @@ export default async function handler(req, res) {
       }
     }));
 
-    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
-    return res.status(200).json({ updatedAt: new Date().toISOString(), quotes, newsBySymbol });
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=120');
+    return res.status(200).json({ updatedAt: new Date().toISOString(), source: 'Yahoo Finance public quote/chart', quotes, newsBySymbol });
   } catch (err) {
     return res.status(502).json({ error: 'Screener fetch failed.', message: err instanceof Error ? err.message : String(err) });
   }
