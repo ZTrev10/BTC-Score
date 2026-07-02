@@ -485,8 +485,14 @@ td strong{color:#c8caee;font-weight:500;}
     <div class="detail-grid">
       <div class="detail-box"><div class="detail-label">SIGNAL, NOT ORACLE</div><div class="detail-text">Find usernames worth researching because they posted specific, early, timestamped DD before a move.</div></div>
       <div class="detail-box"><div class="detail-label">SPECIALIST EDGE</div><div class="detail-text">People in industries like grid, defense, medical devices, software, or water may notice demand changes before broad screens do.</div></div>
-      <div class="detail-box"><div class="detail-label">ANTI-HYPE FILTER</div><div class="detail-text">Penalize moon language, one-call wonders, squeeze-only theses, no bear case, deleted posts, and accounts that spray too many tickers.</div></div>
+      <div class="detail-box"><div class="detail-label">BUY-AND-HOLD FILTER</div><div class="detail-text">Reward business DD and long-term catalysts. Penalize weekly options, YOLOs, squeeze-only theses, no bear case, deleted posts, and accounts that spray too many tickers.</div></div>
     </div>
+  </div>
+
+  <div class="card">
+    <p class="section-label">REAL USER WATCHLIST</p>
+    <p style="font-size:11px;color:#3a3d6a;line-height:1.6;margin-bottom:10px;">Actual Reddit usernames stay hidden until a backtest proves they clear the evidence bar. This avoids fake gurus and one-hit-wonder traps.</p>
+    <div id="reddit-user-gate"></div>
   </div>
 
   <div class="card">
@@ -1882,11 +1888,11 @@ const EMERGING_LEADERS=[
   {ticker:'MWA',name:'Mueller Water Products',theme:'Water infrastructure replacement / municipal resilience',leader:69,revenue:62,guidance:66,narrative:78,institutional:52,retail:22,entry:'Early/quiet theme. Look for evidence of order acceleration from water infrastructure spend.',risk:'Municipal budgets, slow growth, cyclicality.'}
 ];
 const REDDIT_SCOUTS=[
-  {username:'industry_grid_candidate',status:'Candidate scout',specialty:'Grid / electrification / data-center power',subreddits:['r/stocks','r/investing','r/ValueInvesting'],clearCalls:4,measuredCalls:3,ddPosts:3,winRate:67,avgOutperformance:14,earlyScore:78,specificity:84,riskHonesty:76,hypeRisk:22,tickers:['PWR','FIX','HUBB','ETN'],bestCall:'Flagged grid backlog durability before broad electrification rerating.',worstCall:'One utility-capex timing call was early and underperformed for 3 months.',note:'Seed profile only. Replace with real username after Reddit history is measured.'},
-  {username:'defense_autonomy_candidate',status:'Candidate scout',specialty:'Defense drones / autonomy / naval systems',subreddits:['r/stocks','r/smallstreetbets','r/ValueInvesting'],clearCalls:5,measuredCalls:4,ddPosts:3,winRate:75,avgOutperformance:18,earlyScore:82,specificity:78,riskHonesty:68,hypeRisk:38,tickers:['KTOS','AVAV','BWXT','HWM'],bestCall:'Connected rearmament and autonomous systems before momentum showed in the stock.',worstCall:'Position sizing risk was understated on a volatile defense small/mid cap.',note:'Promising theme specialist pattern, but needs real post IDs and timestamped outcomes.'},
-  {username:'medtech_workflow_candidate',status:'Candidate scout',specialty:'Medical devices / hospital workflow / procedure growth',subreddits:['r/stocks','r/investing','r/SecurityAnalysis'],clearCalls:3,measuredCalls:3,ddPosts:3,winRate:67,avgOutperformance:11,earlyScore:70,specificity:86,riskHonesty:82,hypeRisk:18,tickers:['ISRG','TMDX','SYK','BSX'],bestCall:'Explained procedure-volume and workflow adoption before earnings confirmation.',worstCall:'Overestimated how quickly margin leverage would show up.',note:'Good example of domain knowledge being more useful than upvotes.'},
-  {username:'software_metrics_candidate',status:'Candidate scout',specialty:'Cloud software / observability / cybersecurity',subreddits:['r/stocks','r/investing'],clearCalls:6,measuredCalls:4,ddPosts:2,winRate:50,avgOutperformance:7,earlyScore:62,specificity:80,riskHonesty:70,hypeRisk:34,tickers:['DDOG','CRWD','MSFT','NET'],bestCall:'Used product and net-retention signals to spot improving software demand.',worstCall:'Multiple calls were directionally right but too early against valuation compression.',note:'Useful data-crunching style, but not enough verified DD posts yet.'},
-  {username:'water_infra_candidate',status:'Candidate scout',specialty:'Water infrastructure / municipal resilience',subreddits:['r/ValueInvesting','r/investing'],clearCalls:2,measuredCalls:2,ddPosts:2,winRate:50,avgOutperformance:5,earlyScore:74,specificity:76,riskHonesty:84,hypeRisk:12,tickers:['XYL','MWA'],bestCall:'Spotted under-discussed water replacement theme before it entered broader stock screens.',worstCall:'Theme timing was slow; municipal spend can take longer than expected.',note:'Early watcher, not verified. Needs more calls before ranking highly.'}
+  {username:'hidden_until_verified_grid_01',reveal:false,status:'Needs backtest',lastActiveDays:24,accountAgeYears:6.2,optionsMentionsPct:4,specialty:'Grid / electrification / data-center power',subreddits:['r/stocks','r/investing','r/ValueInvesting'],clearCalls:4,measuredCalls:3,ddPosts:3,winRate:67,avgOutperformance:14,earlyScore:78,specificity:84,riskHonesty:76,hypeRisk:22,tickers:['PWR','FIX','HUBB','ETN'],bestCall:'Flagged grid backlog durability before broad electrification rerating.',worstCall:'One utility-capex timing call was early and underperformed for 3 months.',note:'Seed profile only. Replace with real username after Reddit history is measured.'},
+  {username:'hidden_until_verified_defense_01',reveal:false,status:'Needs backtest',lastActiveDays:11,accountAgeYears:4.7,optionsMentionsPct:18,specialty:'Defense drones / autonomy / naval systems',subreddits:['r/stocks','r/smallstreetbets','r/ValueInvesting'],clearCalls:5,measuredCalls:4,ddPosts:3,winRate:75,avgOutperformance:18,earlyScore:82,specificity:78,riskHonesty:68,hypeRisk:38,tickers:['KTOS','AVAV','BWXT','HWM'],bestCall:'Connected rearmament and autonomous systems before momentum showed in the stock.',worstCall:'Position sizing risk was understated on a volatile defense small/mid cap.',note:'Promising theme specialist pattern, but needs real post IDs and timestamped outcomes.'},
+  {username:'hidden_until_verified_medtech_01',reveal:false,status:'Needs backtest',lastActiveDays:67,accountAgeYears:8.1,optionsMentionsPct:2,specialty:'Medical devices / hospital workflow / procedure growth',subreddits:['r/stocks','r/investing','r/SecurityAnalysis'],clearCalls:3,measuredCalls:3,ddPosts:3,winRate:67,avgOutperformance:11,earlyScore:70,specificity:86,riskHonesty:82,hypeRisk:18,tickers:['ISRG','TMDX','SYK','BSX'],bestCall:'Explained procedure-volume and workflow adoption before earnings confirmation.',worstCall:'Overestimated how quickly margin leverage would show up.',note:'Good example of domain knowledge being more useful than upvotes.'},
+  {username:'hidden_until_verified_software_01',reveal:false,status:'Needs backtest',lastActiveDays:142,accountAgeYears:3.4,optionsMentionsPct:28,specialty:'Cloud software / observability / cybersecurity',subreddits:['r/stocks','r/investing'],clearCalls:6,measuredCalls:4,ddPosts:2,winRate:50,avgOutperformance:7,earlyScore:62,specificity:80,riskHonesty:70,hypeRisk:34,tickers:['DDOG','CRWD','MSFT','NET'],bestCall:'Used product and net-retention signals to spot improving software demand.',worstCall:'Multiple calls were directionally right but too early against valuation compression.',note:'Useful data-crunching style, but not enough verified DD posts yet.'},
+  {username:'hidden_until_verified_water_01',reveal:false,status:'Needs backtest',lastActiveDays:221,accountAgeYears:5.6,optionsMentionsPct:0,specialty:'Water infrastructure / municipal resilience',subreddits:['r/ValueInvesting','r/investing'],clearCalls:2,measuredCalls:2,ddPosts:2,winRate:50,avgOutperformance:5,earlyScore:74,specificity:76,riskHonesty:84,hypeRisk:12,tickers:['XYL','MWA'],bestCall:'Spotted under-discussed water replacement theme before it entered broader stock screens.',worstCall:'Theme timing was slow; municipal spend can take longer than expected.',note:'Early watcher, not verified. Needs more calls before ranking highly.'}
 ];
 const WIDER_MARKET_CANDIDATES=[
   {ticker:'IDXX',name:'IDEXX Laboratories',category:'Healthcare compounder',theme:'Pet healthcare diagnostics / recurring consumables',quality:88,thesis:82,valuation:54,macro:70,confidence:68,notes:'High-quality diagnostics model. Best after valuation compression or veterinary demand fears, not if testing volume structurally weakens.'},
@@ -2246,24 +2252,38 @@ function redditScoutScore(s){
   const consistency=clamp((Number(s.winRate)||0)*0.7+(Number(s.avgOutperformance)||0)*1.2);
   const thesis=clamp((Number(s.specificity)||0)*0.42+(Number(s.riskHonesty)||0)*0.30+(Number(s.earlyScore)||0)*0.28);
   const antiHype=clamp(100-(Number(s.hypeRisk)||0));
-  const score=Math.round(clamp(sample*0.18+consistency*0.26+thesis*0.36+antiHype*0.20));
+  const optionsPenalty=Math.min(24,Number(s.optionsMentionsPct||0)*0.8);
+  const activeDays=Number(s.lastActiveDays);
+  const active=Number.isFinite(activeDays)&&activeDays<=180;
+  const dormant=Number.isFinite(activeDays)&&activeDays>180;
+  const oneHit=Number(s.measuredCalls)<3||Number(s.ddPosts)<2;
+  const score=Math.round(clamp(sample*0.18+consistency*0.26+thesis*0.36+antiHype*0.20-optionsPenalty-(dormant?8:0)-(oneHit?10:0)));
   let label='CANDIDATE SCOUT';
   let color='#BA7517';
   let copy='Interesting lead, but not enough measured history to treat as proven.';
-  if(Number(s.measuredCalls)>=5&&Number(s.ddPosts)>=3&&score>=76&&Number(s.hypeRisk)<=35){
-    label='VERIFIED SCOUT';
+  if(Number(s.hypeRisk)>=55||Number(s.optionsMentionsPct)>=45){
+    label='HIGH-NOISE ACCOUNT';
+    color='#E24B4A';
+    copy='Some signal may exist, but hype/options behavior is too high for buy-and-hold discovery.';
+  }else if(oneHit&&score>=58){
+    label='ONE-HIT WONDER';
+    color='#BA7517';
+    copy='One or two useful calls are not enough. Needs repeatability before revealing or following.';
+  }else if(dormant&&score>=68){
+    label='DORMANT SCOUT';
+    color='#6a6d9a';
+    copy='Historical pattern is interesting, but the account is not active enough for current monitoring.';
+  }else if(active&&Number(s.measuredCalls)>=5&&Number(s.ddPosts)>=3&&score>=76&&Number(s.hypeRisk)<=35&&Number(s.optionsMentionsPct)<=20){
+    label='VERIFIED ACTIVE SCOUT';
     color='#1D9E75';
-    copy='Strong enough timestamped record to monitor future DD posts closely.';
+    copy='Strong enough timestamped record to monitor future DD posts closely. Real username may be revealed after audit.';
   }else if(Number(s.measuredCalls)>=3&&score>=68&&Number(s.hypeRisk)<=45){
     label='PROMISING DD POSTER';
     color='#639922';
     copy='Worth tracking, but still needs more timestamped outcomes.';
-  }else if(Number(s.hypeRisk)>=55){
-    label='HIGH-NOISE SCOUT';
-    color='#E24B4A';
-    copy='Some signal may exist, but hype/pump risk is too high without stronger proof.';
   }
-  return {score,label,color,copy,sample:Math.round(sample),consistency:Math.round(consistency),thesis:Math.round(thesis),antiHype:Math.round(antiHype)};
+  const displayName=s.reveal&&label==='VERIFIED ACTIVE SCOUT'?s.username:'Hidden until verified';
+  return {score,label,color,copy,sample:Math.round(sample),consistency:Math.round(consistency),thesis:Math.round(thesis),antiHype:Math.round(antiHype),optionsPenalty:Math.round(optionsPenalty),active,dormant,oneHit,displayName};
 }
 function redditTickerResearch(ticker){
   const sym=cleanSymbol(ticker);
@@ -2292,11 +2312,24 @@ function renderRedditMethodology(){
   if(!el)return;
   const rows=[
     ['Minimum evidence','20-50 ticker-related posts/comments, 5-10 clear stock calls, 3+ DD posts, and 6-12 months of history before verification.'],
+    ['Still active test','Verified Active Scout requires recent activity within 180 days. Strong older accounts become Dormant Scout until they post again.'],
     ['Outcome windows','Measure price at post time, then 1M, 3M, 6M, and 12M returns versus SPY, QQQ, and the relevant sector ETF.'],
-    ['Quality filter','Reward clear mechanism, catalyst, valuation context, and bear case. Penalize hype language and one lucky viral call.'],
+    ['Quality filter','Reward clear mechanism, catalyst, valuation context, and bear case. Penalize hype language, options-first posts, and one lucky viral call.'],
     ['Final use','A strong Reddit signal only creates a research lead. Business Quality, Entry Score, news, valuation, and portfolio fit still decide action.']
   ];
   el.innerHTML=`<div class="table-wrap"><table><tbody>${rows.map(r=>`<tr><td><strong>${esc(r[0])}</strong></td><td>${esc(r[1])}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function renderRedditUserGate(rows=[]){
+  const el=document.getElementById('reddit-user-gate');
+  if(!el)return;
+  const counts=rows.reduce((acc,s)=>{acc[s.setup.label]=(acc[s.setup.label]||0)+1;return acc;},{});
+  const verified=counts['VERIFIED ACTIVE SCOUT']||0;
+  const hidden=rows.filter(s=>!s.reveal).length;
+  el.innerHTML=`<div class="detail-grid">
+    <div class="detail-box"><div class="detail-label">USERNAMES REVEALED</div><div class="detail-text">${verified&&rows.some(s=>s.reveal)?verified:0} shown · ${hidden} hidden pending evidence audit.</div></div>
+    <div class="detail-box"><div class="detail-label">REVEAL RULE</div><div class="detail-text">Only reveal public usernames after real post IDs, timestamps, benchmarked outcomes, activity status, and options-hype checks are attached.</div></div>
+    <div class="detail-box"><div class="detail-label">BUY/HOLD BIAS</div><div class="detail-text">Options-first accounts can still be tracked, but they cannot become verified active scouts unless underlying stock DD is the main signal.</div></div>
+  </div>`;
 }
 function renderRedditScout(){
   renderRedditMethodology();
@@ -2305,21 +2338,25 @@ function renderRedditScout(){
   const el=document.getElementById('reddit-scout-list');
   if(!el)return;
   const rows=[...REDDIT_SCOUTS].map(s=>({...s,setup:redditScoutScore(s)})).sort((a,b)=>b.setup.score-a.setup.score);
+  renderRedditUserGate(rows);
   el.innerHTML=rows.map(s=>{
     const setup=s.setup;
     const tickerButtons=(s.tickers||[]).map(t=>`<button class="btn" onclick="event.stopPropagation();redditTickerResearch('${esc(t)}')">${esc(t)}</button>`).join('');
     const watchButtons=(s.tickers||[]).slice(0,3).map(t=>`<button class="btn" onclick="event.stopPropagation();redditTickerWatchlist('${esc(t)}')">Watch ${esc(t)}</button>`).join('');
+    const activeText=Number.isFinite(Number(s.lastActiveDays))?`${s.lastActiveDays}d since last activity`:'activity unknown';
+    const accountAge=Number.isFinite(Number(s.accountAgeYears))?`${Number(s.accountAgeYears).toFixed(1)}y account age`:'account age unknown';
     return `<div class="op-card">
       <div class="op-head" onclick="toggleCard(this)">
         <div>
-          <div class="op-ticker">${esc(s.username)} <span style="font-size:10px;color:#3a3d6a;">${esc(s.specialty)}</span></div>
-          <div class="op-sub">${esc(s.status)} · ${esc((s.subreddits||[]).join(', '))} · ${s.measuredCalls} measured calls · hype risk ${s.hypeRisk}/100</div>
+          <div class="op-ticker">${esc(setup.displayName)} <span style="font-size:10px;color:#3a3d6a;">${esc(s.specialty)}</span></div>
+          <div class="op-sub">${esc(s.status)} · ${esc((s.subreddits||[]).join(', '))} · ${s.measuredCalls} measured calls · ${activeText} · options ${s.optionsMentionsPct||0}%</div>
           <div class="op-chip-row">
             <span class="op-chip">Win rate ${s.winRate}%</span>
             <span class="op-chip">Avg 6M alpha ${s.avgOutperformance>=0?'+':''}${s.avgOutperformance}%</span>
             <span class="op-chip">Early ${s.earlyScore}</span>
             <span class="op-chip">Specificity ${s.specificity}</span>
             <span class="op-chip">Risk honesty ${s.riskHonesty}</span>
+            <span class="op-chip">Options penalty ${setup.optionsPenalty}</span>
           </div>
         </div>
         <div>
@@ -2330,7 +2367,8 @@ function renderRedditScout(){
       <div class="op-details">
         <div class="detail-grid">
           <div class="detail-box"><div class="detail-label">SCOUT READ</div><div class="detail-text"><span style="color:${setup.color};">${setup.label}</span> · ${esc(setup.copy)} ${esc(s.note)}</div></div>
-          <div class="detail-box"><div class="detail-label">SCORE BREAKDOWN</div><div class="detail-text">Sample ${setup.sample}/100 · Consistency ${setup.consistency}/100 · Thesis quality ${setup.thesis}/100 · Anti-hype ${setup.antiHype}/100.</div></div>
+          <div class="detail-box"><div class="detail-label">SCORE BREAKDOWN</div><div class="detail-text">Sample ${setup.sample}/100 · Consistency ${setup.consistency}/100 · Thesis quality ${setup.thesis}/100 · Anti-hype ${setup.antiHype}/100 · Options penalty ${setup.optionsPenalty}.</div></div>
+          <div class="detail-box"><div class="detail-label">ACTIVITY / REVEAL STATUS</div><div class="detail-text">${esc(accountAge)} · ${esc(activeText)}. Username remains hidden unless the account is verified active with attached evidence.</div></div>
           <div class="detail-box"><div class="detail-label">BEST EARLY CALL</div><div class="detail-text">${esc(s.bestCall)}</div></div>
           <div class="detail-box"><div class="detail-label">WORST / RISK CHECK</div><div class="detail-text">${esc(s.worstCall)}</div></div>
           <div class="detail-box"><div class="detail-label">TICKERS TO RESEARCH</div><div class="detail-text">${(s.tickers||[]).map(esc).join(', ')}</div></div>
