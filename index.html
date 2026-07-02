@@ -147,6 +147,7 @@ td strong{color:#c8caee;font-weight:500;}
   <div class="tab" onclick="switchTab('research')">🔎 RESEARCH</div>
   <div class="tab" onclick="switchTab('watchlist')">⭐ WATCHLIST</div>
   <div class="tab" onclick="switchTab('emerging')">🚀 EMERGING LEADERS</div>
+  <div class="tab" onclick="switchTab('reddit')">🔦 REDDIT SCOUT</div>
   <div class="tab" onclick="switchTab('portfolio')">📊 PORTFOLIO</div>
   <div class="tab" onclick="switchTab('memory')">🧠 MEMORY</div>
 </div>
@@ -466,6 +467,44 @@ td strong{color:#c8caee;font-weight:500;}
   </div>
 
   <div id="emerging-list"></div>
+</div>
+
+<!-- ═══════════════ REDDIT SCOUT TAB ═══════════════ -->
+<div class="tab-content" id="tab-reddit">
+  <div class="brief-header">
+    <div>
+      <p class="section-label">REDDIT SCOUT</p>
+      <p style="font-size:11px;color:#3a3d6a;">Candidate DD scouts only · verify timestamped calls before treating any user as proven</p>
+      <p style="font-size:10px;color:#3a3d6a;margin-top:4px;" id="reddit-status">V1 uses seed examples and scoring rules; live Reddit API/backtest not connected yet.</p>
+    </div>
+    <button class="btn" onclick="renderRedditScout()">↻ Re-score Scouts</button>
+  </div>
+
+  <div class="card">
+    <p class="section-label">WHAT THIS IS FOR</p>
+    <div class="detail-grid">
+      <div class="detail-box"><div class="detail-label">SIGNAL, NOT ORACLE</div><div class="detail-text">Find usernames worth researching because they posted specific, early, timestamped DD before a move.</div></div>
+      <div class="detail-box"><div class="detail-label">SPECIALIST EDGE</div><div class="detail-text">People in industries like grid, defense, medical devices, software, or water may notice demand changes before broad screens do.</div></div>
+      <div class="detail-box"><div class="detail-label">ANTI-HYPE FILTER</div><div class="detail-text">Penalize moon language, one-call wonders, squeeze-only theses, no bear case, deleted posts, and accounts that spray too many tickers.</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="section-label">V1 SCORING RULE</p>
+    <p style="font-size:11px;color:#3a3d6a;line-height:1.6;margin-bottom:10px;">A username needs enough measured history before it becomes a verified scout. Until then, it stays a candidate.</p>
+    <div id="reddit-methodology"></div>
+  </div>
+
+  <div id="reddit-scout-list"></div>
+
+  <div class="card">
+    <p class="section-label">NEXT DATA STEP</p>
+    <div class="detail-grid">
+      <div class="detail-box"><div class="detail-label">SCAN</div><div class="detail-text">r/stocks, r/investing, r/SecurityAnalysis, r/ValueInvesting, selected smaller communities, and noisy forums only after strict filtering.</div></div>
+      <div class="detail-box"><div class="detail-label">MEASURE</div><div class="detail-text">Ticker, post timestamp, price then, 1M/3M/6M/12M return, SPY/QQQ/sector outperformance, and whether the stated catalyst matched reality.</div></div>
+      <div class="detail-box"><div class="detail-label">SURFACE</div><div class="detail-text">New posts from historically strong users become research leads that flow into Business Quality, Entry Score, and Portfolio Fit.</div></div>
+    </div>
+  </div>
 </div>
 
 <!-- ═══════════════ PORTFOLIO TAB ═══════════════ -->
@@ -850,6 +889,7 @@ function switchTab(t){
   if(t==='research'){loadScreener();renderResearchHistory();}
   if(t==='watchlist'){loadScreener();renderWatchlist();}
   if(t==='emerging')loadScreener();
+  if(t==='reddit')renderRedditScout();
   if(t==='memory')renderMemorySnapshots();
 }
 
@@ -1534,12 +1574,13 @@ function widerMarketCandidateScore(c){
   const outcomes=historicalOutcomeScore(c.ticker,c.theme);
   const regime=marketRegimeFit(c);
   const portfolio=portfolioPressureFor(c.ticker);
+  const distanceFromHigh=distanceFromHighFor(c.ticker);
   const technical=Number.isFinite(move)?(move<0?clamp(55+Math.min(24,Math.abs(move)*3.2)):clamp(48-Math.min(14,Math.abs(move)*1.4))):52;
   const rawValuation=clamp(c.valuation+(Number.isFinite(move)&&move<0?Math.min(14,Math.abs(move)*1.8):0));
   const valuationGuard=valuationGuardrailFor(c.ticker,c.category,rawValuation,move);
   const valuation=valuationGuard.score;
-  const entry=entryQualityScore(move,valuation,c.quality);
-  const entryRead=entryQualityRead(move,entry);
+  const entry=entryQualityScore(move,valuation,c.quality,distanceFromHigh);
+  const entryRead=entryQualityRead(move,entry,distanceFromHigh);
   const business=businessQualityScore({quality:c.quality,thesis:c.thesis,macro:c.macro,confidence:c.confidence});
   const thesisPenalty=news?.thesisRisk==='thesis-breaking'?32:news?.thesisRisk==='verify'?8:0;
   const liveBonus=news?4:0;
@@ -1567,7 +1608,7 @@ function widerMarketCandidateScore(c){
     downEnough:Number.isFinite(move)&&move<=-4,
     context:'wider'
   });
-  return {score,action,price,move,valuation,business,entry,entryRead,technical,history,outcomes,news,regime,portfolio,valuationGuard};
+  return {score,action,price,move,distanceFromHigh,valuation,business,entry,entryRead,technical,history,outcomes,news,regime,portfolio,valuationGuard};
 }
 function watchlistRecommendations(){
   const saved=savedWatchlistSet();
@@ -1584,19 +1625,20 @@ function watchlistRecommendations(){
         score:o.score,
         color:action.color,
         label:action.label,
-        why:`${action.copy} ${moveDirection(o.drop).label} ${moveDirection(o.drop).display}; ${o.setup?.risk?.level||'setup reviewed'}.`,
+        why:`${action.copy} ${moveDirection(o.drop).label} ${moveDirection(o.drop).display} 1D; ${highDiscountCopy(o.setup?.distanceFromHigh)} ${o.setup?.risk?.level||'setup reviewed'}.`,
         add:`addOpportunityToWatchlist('${esc(o.ticker)}')`
       };
     });
   const emerging=[...EMERGING_LEADERS]
     .filter(e=>!saved.has(e.ticker))
     .sort((a,b)=>b.leader-a.leader)
-    .filter(e=>emergingAction(e,entryQualityScore(liveChangeFor(e.ticker),52,e.revenue)).label!=='AVOID / THESIS DAMAGED')
+    .filter(e=>emergingAction(e,entryQualityScore(liveChangeFor(e.ticker),52,e.revenue,distanceFromHighFor(e.ticker))).label!=='AVOID / THESIS DAMAGED')
     .slice(0,8)
     .map(e=>{
-      const entry=entryQualityScore(liveChangeFor(e.ticker),52,e.revenue);
+      const entry=entryQualityScore(liveChangeFor(e.ticker),52,e.revenue,distanceFromHighFor(e.ticker));
       const action=emergingAction(e,entry);
       const score=businessQualityScore({quality:e.revenue,thesis:e.leader,macro:e.narrative,confidence:e.institutional});
+      const distanceFromHigh=distanceFromHighFor(e.ticker);
       return {
         ticker:e.ticker,
         name:e.name,
@@ -1604,7 +1646,7 @@ function watchlistRecommendations(){
         score,
         color:action.color,
         label:action.label,
-        why:`Theme: ${e.theme}. ${e.entry}`,
+        why:`Theme: ${e.theme}. ${highDiscountCopy(distanceFromHigh)} ${e.entry}`,
         add:`addEmergingToWatchlist('${esc(e.ticker)}')`
       };
     });
@@ -1621,7 +1663,7 @@ function watchlistRecommendations(){
       score:setup.score,
       color:setup.action.color,
       label:setup.action.label,
-      why:`${setup.action.copy} ${Number.isFinite(setup.move)?moveDirection(setup.move).label+' '+moveDirection(setup.move).display:'Move unavailable'} · ${c.category} · ${setup.regime.note} ${setup.portfolio.note} ${setup.outcomes.label}.`,
+      why:`${setup.action.copy} ${Number.isFinite(setup.move)?moveDirection(setup.move).label+' '+moveDirection(setup.move).display+' 1D':'Move unavailable'} · ${c.category} · ${setup.regime.note} ${setup.portfolio.note} ${setup.outcomes.label}.`,
       add:`addWiderMarketToWatchlist('${esc(c.ticker)}')`
     }));
   return [...opps,...emerging,...wider].sort((a,b)=>b.score-a.score).slice(0,7);
@@ -1734,7 +1776,7 @@ async function loadBrief(){
     
     <p class="footer-note">Not financial advice · Prices: CoinGecko · Sentiment: Alternative.me · News policy: 24h normal / 48h major</p>
   `;
-  try{const top=rankedOpportunities()[0];const act=opportunityActionFor(top);const d=deploymentForScore(currentCycleScore());document.getElementById('brief-opportunity-mini').innerHTML=`<div class="score-mini"><div class="score-mini-num" style="color:${act.color};">${top.score}</div><div><div style="font-size:12px;color:${act.color};letter-spacing:0.12em;margin-bottom:4px;">${top.ticker} · ${act.label}</div><div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${moveHtml(top.drop)} · ${top.reason}</div><div style="font-size:11px;color:#5a5d8a;margin-top:3px;">${esc(act.copy)} Reserve suggestion: ${money(d.amount)} if BTC Score and price drawdown triggers are both met.</div></div></div>`;}catch(e){}
+  try{const top=rankedOpportunities()[0];const act=opportunityActionFor(top);const d=deploymentForScore(currentCycleScore());document.getElementById('brief-opportunity-mini').innerHTML=`<div class="score-mini"><div class="score-mini-num" style="color:${act.color};">${top.score}</div><div><div style="font-size:12px;color:${act.color};letter-spacing:0.12em;margin-bottom:4px;">${top.ticker} · ${act.label}</div><div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${moveHtml(top.drop,'1D')} · ${top.reason}</div><div style="font-size:11px;color:#5a5d8a;margin-top:3px;">${esc(act.copy)} Reserve suggestion: ${money(d.amount)} if BTC Score and price drawdown triggers are both met.</div></div></div>`;}catch(e){}
   document.getElementById('brief-loading').style.display='none';
   document.getElementById('brief-content').style.display='block';
   try{loadLiveNews();}catch(e){}
@@ -1839,6 +1881,13 @@ const EMERGING_LEADERS=[
   {ticker:'XYL',name:'Xylem',theme:'Water infrastructure / measurement / municipal resilience',leader:72,revenue:66,guidance:70,narrative:84,institutional:62,retail:22,entry:'Best on municipal budget fear if orders and backlog stay healthy.',risk:'Municipal spending, integration risk, valuation.'},
   {ticker:'MWA',name:'Mueller Water Products',theme:'Water infrastructure replacement / municipal resilience',leader:69,revenue:62,guidance:66,narrative:78,institutional:52,retail:22,entry:'Early/quiet theme. Look for evidence of order acceleration from water infrastructure spend.',risk:'Municipal budgets, slow growth, cyclicality.'}
 ];
+const REDDIT_SCOUTS=[
+  {username:'industry_grid_candidate',status:'Candidate scout',specialty:'Grid / electrification / data-center power',subreddits:['r/stocks','r/investing','r/ValueInvesting'],clearCalls:4,measuredCalls:3,ddPosts:3,winRate:67,avgOutperformance:14,earlyScore:78,specificity:84,riskHonesty:76,hypeRisk:22,tickers:['PWR','FIX','HUBB','ETN'],bestCall:'Flagged grid backlog durability before broad electrification rerating.',worstCall:'One utility-capex timing call was early and underperformed for 3 months.',note:'Seed profile only. Replace with real username after Reddit history is measured.'},
+  {username:'defense_autonomy_candidate',status:'Candidate scout',specialty:'Defense drones / autonomy / naval systems',subreddits:['r/stocks','r/smallstreetbets','r/ValueInvesting'],clearCalls:5,measuredCalls:4,ddPosts:3,winRate:75,avgOutperformance:18,earlyScore:82,specificity:78,riskHonesty:68,hypeRisk:38,tickers:['KTOS','AVAV','BWXT','HWM'],bestCall:'Connected rearmament and autonomous systems before momentum showed in the stock.',worstCall:'Position sizing risk was understated on a volatile defense small/mid cap.',note:'Promising theme specialist pattern, but needs real post IDs and timestamped outcomes.'},
+  {username:'medtech_workflow_candidate',status:'Candidate scout',specialty:'Medical devices / hospital workflow / procedure growth',subreddits:['r/stocks','r/investing','r/SecurityAnalysis'],clearCalls:3,measuredCalls:3,ddPosts:3,winRate:67,avgOutperformance:11,earlyScore:70,specificity:86,riskHonesty:82,hypeRisk:18,tickers:['ISRG','TMDX','SYK','BSX'],bestCall:'Explained procedure-volume and workflow adoption before earnings confirmation.',worstCall:'Overestimated how quickly margin leverage would show up.',note:'Good example of domain knowledge being more useful than upvotes.'},
+  {username:'software_metrics_candidate',status:'Candidate scout',specialty:'Cloud software / observability / cybersecurity',subreddits:['r/stocks','r/investing'],clearCalls:6,measuredCalls:4,ddPosts:2,winRate:50,avgOutperformance:7,earlyScore:62,specificity:80,riskHonesty:70,hypeRisk:34,tickers:['DDOG','CRWD','MSFT','NET'],bestCall:'Used product and net-retention signals to spot improving software demand.',worstCall:'Multiple calls were directionally right but too early against valuation compression.',note:'Useful data-crunching style, but not enough verified DD posts yet.'},
+  {username:'water_infra_candidate',status:'Candidate scout',specialty:'Water infrastructure / municipal resilience',subreddits:['r/ValueInvesting','r/investing'],clearCalls:2,measuredCalls:2,ddPosts:2,winRate:50,avgOutperformance:5,earlyScore:74,specificity:76,riskHonesty:84,hypeRisk:12,tickers:['XYL','MWA'],bestCall:'Spotted under-discussed water replacement theme before it entered broader stock screens.',worstCall:'Theme timing was slow; municipal spend can take longer than expected.',note:'Early watcher, not verified. Needs more calls before ranking highly.'}
+];
 const WIDER_MARKET_CANDIDATES=[
   {ticker:'IDXX',name:'IDEXX Laboratories',category:'Healthcare compounder',theme:'Pet healthcare diagnostics / recurring consumables',quality:88,thesis:82,valuation:54,macro:70,confidence:68,notes:'High-quality diagnostics model. Best after valuation compression or veterinary demand fears, not if testing volume structurally weakens.'},
   {ticker:'RMD',name:'ResMed',category:'Healthcare compounder',theme:'Sleep apnea devices / connected respiratory care',quality:84,thesis:78,valuation:62,macro:68,confidence:66,notes:'Durable sleep-health market with recurring masks/supplies. Watch GLP-1 fear and reimbursement pressure for temporary dislocations.'},
@@ -1905,9 +1954,28 @@ function moveDirection(n){
   if(v<0)return {label:'Down',cls:'move-down',display:`${Math.abs(v).toFixed(1)}%`};
   return {label:'Flat',cls:'move-flat',display:'0.0%'};
 }
-function moveHtml(n){
+function moveHtml(n,label=''){
   const m=moveDirection(n);
-  return `<span class="${m.cls}">${m.label} ${m.display}</span>`;
+  return `<span class="${m.cls}">${m.label} ${m.display}${label?` ${esc(label)}`:''}</span>`;
+}
+function distanceFromHighFor(ticker){
+  const q=window._screenerData?.[cleanSymbol(ticker)];
+  const d=Number(q?.distanceFromHigh);
+  return Number.isFinite(d)?d:null;
+}
+function highDiscountHtml(ticker){
+  const d=distanceFromHighFor(ticker);
+  if(!Number.isFinite(d)||d>=-1)return '';
+  const cls=d<=-10?'move-up':d<=-5?'move-flat':'move-down';
+  return `<span class="${cls}">${Math.abs(d).toFixed(1)}% below 52W high</span>`;
+}
+function highDiscountCopy(distanceFromHigh){
+  const d=Number(distanceFromHigh);
+  if(!Number.isFinite(d))return '';
+  if(d<=-15)return `Still ${Math.abs(d).toFixed(1)}% below its 52-week high, so today’s move should be judged against a larger pullback.`;
+  if(d<=-8)return `${Math.abs(d).toFixed(1)}% below its 52-week high; entry may still be improving even if today is green.`;
+  if(d<=-3)return `${Math.abs(d).toFixed(1)}% below its 52-week high; modest pullback only.`;
+  return 'Near its 52-week high; require more entry discipline.';
 }
 function downsidePct(move){
   const v=Number(move);
@@ -1917,17 +1985,27 @@ function upsidePct(move){
   const v=Number(move);
   return Number.isFinite(v)&&v>0?v:0;
 }
-function entryQualityScore(move,valuation=50,quality=60){
+function entryQualityScore(move,valuation=50,quality=60,distanceFromHigh=null){
   const v=Number(move);
   const val=Number(valuation)||50;
   const q=Number(quality)||60;
-  if(!Number.isFinite(v))return Math.round(clamp(42+(val-50)*0.35+(q-70)*0.08));
-  if(v<0)return Math.round(clamp(48+Math.min(34,Math.abs(v)*4.6)+(val-50)*0.25+(q-70)*0.06));
-  if(v>0)return Math.round(clamp(48-Math.min(30,v*2.5)+(val-50)*0.15+(q-70)*0.04));
-  return Math.round(clamp(48+(val-50)*0.2));
+  const d=Number(distanceFromHigh);
+  const highBoost=Number.isFinite(d)&&d<0?Math.min(24,Math.abs(d)*0.9):0;
+  const nearHighPenalty=Number.isFinite(d)&&d>-3?10:0;
+  if(!Number.isFinite(v))return Math.round(clamp(42+(val-50)*0.35+(q-70)*0.08+highBoost-nearHighPenalty));
+  if(v<0)return Math.round(clamp(48+Math.min(34,Math.abs(v)*4.6)+(val-50)*0.25+(q-70)*0.06+highBoost-nearHighPenalty));
+  if(v>0){
+    const upPenalty=Math.min(30,v*2.5);
+    const adjustedUpPenalty=Number.isFinite(d)&&d<=-10?Math.min(upPenalty,10):upPenalty;
+    return Math.round(clamp(48-adjustedUpPenalty+(val-50)*0.15+(q-70)*0.04+highBoost-nearHighPenalty));
+  }
+  return Math.round(clamp(48+(val-50)*0.2+highBoost-nearHighPenalty));
 }
-function entryQualityRead(move,score){
+function entryQualityRead(move,score,distanceFromHigh=null){
   const v=Number(move);
+  const d=Number(distanceFromHigh);
+  if(Number.isFinite(d)&&d<=-15&&score>=58)return {label:'Pulled back from highs',color:'#639922',copy:'Green today can still be buyable because price remains meaningfully below recent highs.'};
+  if(Number.isFinite(d)&&d<=-8&&score>=58)return {label:'Entry improving',color:'#639922',copy:'Price remains below recent highs, so do not judge the setup only by today’s move.'};
   if(Number.isFinite(v)&&v>4)return {label:'Entry extended',color:'#E24B4A',copy:'Great business may be running ahead of the entry price.'};
   if(score>=78)return {label:'Entry reset',color:'#1D9E75',copy:'Price weakness is large enough to deserve active research.'};
   if(score>=64)return {label:'Entry improving',color:'#639922',copy:'Some valuation relief, but still verify the reason for the move.'};
@@ -2020,8 +2098,9 @@ function opportunitySetup(item){
   const thesisIntact=clamp((thesisBase*0.72)+(risk.score*0.28));
   const valuation=valuationImprovementScore(item);
   const selloff=selloffScore(item.drop);
-  const entry=entryQualityScore(item.drop,valuation,quality);
-  const entryRead=entryQualityRead(item.drop,entry);
+  const distanceFromHigh=distanceFromHighFor(item.ticker);
+  const entry=entryQualityScore(item.drop,valuation,quality,distanceFromHigh);
+  const entryRead=entryQualityRead(item.drop,entry,distanceFromHigh);
   const newsQuality=item.liveNews?clamp(74-(item.newsSeverity||40)*0.18):48;
   const macro=macroScoreForOpportunity(item);
   const confidence=clamp(item.confidence + (item.liveNews?8:-10) + (downsidePct(item.drop)>=5?5:0) - (upsidePct(item.drop)>=4?6:0) - (risk.temporary?0:8));
@@ -2041,7 +2120,7 @@ function opportunitySetup(item){
   const valuationImproved=Number(item.drop)<0&&valuation>=60;
   const downEnough=Number(item.drop)<=-5;
   const speculative=isSpeculativeCandidate(`${item.ticker} ${item.category} ${item.reason}`,quality,confidence);
-  return {score,quality,business,thesisIntact,valuation,selloff,entry,entryRead,newsQuality,macro,confidence,risk,valuationImproved,downEnough,raw,hasLiveNews:!!item.liveNews,speculative,thesisDamaged:thesisBreak};
+  return {score,quality,business,thesisIntact,valuation,selloff,entry,entryRead,distanceFromHigh,newsQuality,macro,confidence,risk,valuationImproved,downEnough,raw,hasLiveNews:!!item.liveNews,speculative,thesisDamaged:thesisBreak};
 }
 function opportunityActionFor(item){
   const s=item.setup||opportunitySetup(item);
@@ -2102,10 +2181,11 @@ function renderOpportunities(){
     const a=opportunityActionFor(item);
     const setup=item.setup||opportunitySetup(item);
     const priceTag=item.livePrice?` · ${priceHtml(item.livePrice)}`:'';
+    const highTag=highDiscountHtml(item.ticker);
     const liveTag=item.isLive?'<span style="color:#1D9E75;font-size:9px;margin-left:6px;">● LIVE</span>':'<span style="color:#3a3d6a;font-size:9px;margin-left:6px;">est.</span>';
     const newsMeta=item.liveNews?`${item.liveNews.source||'News'}${Number.isFinite(item.liveNews.ageHours)?' · '+item.liveNews.ageHours.toFixed(1)+'h old':''}${item.liveNews.thesisRisk?' · '+item.liveNews.thesisRisk:''}`:'Placeholder context — waiting for a live down-5% news trigger.';
     const chips=[
-      moveHtml(item.drop),
+      moveHtml(item.drop,'1D'),
       `Business ${Math.round(setup.business)}`,
       `Entry ${Math.round(setup.entry)}`,
       `<span style="color:${setup.entryRead.color};">${esc(setup.entryRead.label)}</span>`,
@@ -2116,7 +2196,7 @@ function renderOpportunities(){
       <div class="op-head" onclick="toggleCard(this)">
         <div>
           <div class="op-ticker">${item.ticker}${liveTag} <span style="font-size:10px;color:#3a3d6a;">${item.name}</span></div>
-          <div class="op-sub">${moveHtml(item.drop)}${priceTag} · ${sectorHtml(item.category)}</div>
+          <div class="op-sub">${moveHtml(item.drop,'1D')}${priceTag}${highTag?` · ${highTag}`:''} · ${sectorHtml(item.category)}</div>
           <div class="op-chip-row">${chips.map(c=>`<span class="op-chip">${c}</span>`).join('')}</div>
         </div>
         <div>
@@ -2129,7 +2209,7 @@ function renderOpportunities(){
           <div class="detail-box"><div class="detail-label">WHY IS IT DOWN?</div><div class="detail-text">${item.reason}<br><span style="color:#6a6d9a;">${newsMeta}</span></div></div>
           <div class="detail-box"><div class="detail-label">THESIS INTEGRITY</div><div class="detail-text">${Math.round(setup.thesisIntact)}/100 · ${setup.risk.level}. ${setup.thesisIntact>=75?'Thesis appears intact.':setup.thesisIntact>=55?'Some risk; verify before sizing up.':'Potential impairment; avoid or keep small.'}</div></div>
           <div class="detail-box"><div class="detail-label">BUSINESS QUALITY</div><div class="detail-text">${Math.round(setup.business)}/100 · Company quality, thesis durability, macro/theme fit, and confidence. ${setup.business>=82?'Elite or near-elite business quality.':setup.business>=68?'Promising business quality, keep researching.':'Quality not proven enough yet.'}</div></div>
-          <div class="detail-box"><div class="detail-label">ENTRY QUALITY</div><div class="detail-text"><span style="color:${setup.entryRead.color};">${Math.round(setup.entry)}/100 · ${esc(setup.entryRead.label)}</span>. ${esc(setup.entryRead.copy)} Valuation ${Math.round(setup.valuation)}/100 · base valuation ${valuationBaseFor(item)}/100.</div></div>
+          <div class="detail-box"><div class="detail-label">ENTRY QUALITY</div><div class="detail-text"><span style="color:${setup.entryRead.color};">${Math.round(setup.entry)}/100 · ${esc(setup.entryRead.label)}</span>. ${esc(setup.entryRead.copy)} ${esc(highDiscountCopy(setup.distanceFromHigh))} Valuation ${Math.round(setup.valuation)}/100 · base valuation ${valuationBaseFor(item)}/100.</div></div>
           <div class="detail-box"><div class="detail-label">SETUP QUALITY</div><div class="detail-text">Quality ${Math.round(setup.quality)} · Selloff ${Math.round(setup.selloff)} · News ${Math.round(setup.newsQuality)} · Macro ${Math.round(setup.macro)} · Confidence ${Math.round(setup.confidence)}.</div></div>
           <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text"><span style="color:${a.color};">${a.label}</span> · ${a.copy}</div></div>
         </div>
@@ -2161,6 +2241,106 @@ function emergingAction(item,entry=null){
   if(business>=78)return {label:'ADD ON PULLBACK',color:'#639922',copy:'Strong emerging leader. Prefer buying weakness rather than chasing strength.'};
   return {label:'WATCH CLOSELY',color:'#BA7517',copy:'Promising, but not enough current evidence or setup.'};
 }
+function redditScoutScore(s){
+  const sample=Math.min(100,(Number(s.measuredCalls||0)/8)*100);
+  const consistency=clamp((Number(s.winRate)||0)*0.7+(Number(s.avgOutperformance)||0)*1.2);
+  const thesis=clamp((Number(s.specificity)||0)*0.42+(Number(s.riskHonesty)||0)*0.30+(Number(s.earlyScore)||0)*0.28);
+  const antiHype=clamp(100-(Number(s.hypeRisk)||0));
+  const score=Math.round(clamp(sample*0.18+consistency*0.26+thesis*0.36+antiHype*0.20));
+  let label='CANDIDATE SCOUT';
+  let color='#BA7517';
+  let copy='Interesting lead, but not enough measured history to treat as proven.';
+  if(Number(s.measuredCalls)>=5&&Number(s.ddPosts)>=3&&score>=76&&Number(s.hypeRisk)<=35){
+    label='VERIFIED SCOUT';
+    color='#1D9E75';
+    copy='Strong enough timestamped record to monitor future DD posts closely.';
+  }else if(Number(s.measuredCalls)>=3&&score>=68&&Number(s.hypeRisk)<=45){
+    label='PROMISING DD POSTER';
+    color='#639922';
+    copy='Worth tracking, but still needs more timestamped outcomes.';
+  }else if(Number(s.hypeRisk)>=55){
+    label='HIGH-NOISE SCOUT';
+    color='#E24B4A';
+    copy='Some signal may exist, but hype/pump risk is too high without stronger proof.';
+  }
+  return {score,label,color,copy,sample:Math.round(sample),consistency:Math.round(consistency),thesis:Math.round(thesis),antiHype:Math.round(antiHype)};
+}
+function redditTickerResearch(ticker){
+  const sym=cleanSymbol(ticker);
+  const input=document.getElementById('research-symbol');
+  if(input)input.value=sym;
+  switchTab('research');
+  runResearch();
+}
+function redditTickerWatchlist(ticker){
+  const sym=cleanSymbol(ticker);
+  const known=WATCHLIST.find(x=>x.ticker===sym);
+  const emerging=EMERGING_LEADERS.find(x=>x.ticker===sym);
+  const wider=WIDER_MARKET_CANDIDATES.find(x=>x.ticker===sym);
+  if(known)return addOpportunityToWatchlist(sym);
+  if(emerging)return addEmergingToWatchlist(sym);
+  if(wider)return addWiderMarketToWatchlist(sym);
+  const rows=userWatchlist();
+  if(!rows.some(r=>r.ticker===sym)){
+    rows.unshift({ticker:sym,name:sym,category:'Reddit Scout lead',notes:'Added from Reddit Scout. Verify username history, thesis quality, and price action before sizing.',source:'Reddit Scout',addedAt:new Date().toISOString()});
+    saveUserWatchlist(rows);
+  }
+  switchTab('watchlist');
+}
+function renderRedditMethodology(){
+  const el=document.getElementById('reddit-methodology');
+  if(!el)return;
+  const rows=[
+    ['Minimum evidence','20-50 ticker-related posts/comments, 5-10 clear stock calls, 3+ DD posts, and 6-12 months of history before verification.'],
+    ['Outcome windows','Measure price at post time, then 1M, 3M, 6M, and 12M returns versus SPY, QQQ, and the relevant sector ETF.'],
+    ['Quality filter','Reward clear mechanism, catalyst, valuation context, and bear case. Penalize hype language and one lucky viral call.'],
+    ['Final use','A strong Reddit signal only creates a research lead. Business Quality, Entry Score, news, valuation, and portfolio fit still decide action.']
+  ];
+  el.innerHTML=`<div class="table-wrap"><table><tbody>${rows.map(r=>`<tr><td><strong>${esc(r[0])}</strong></td><td>${esc(r[1])}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function renderRedditScout(){
+  renderRedditMethodology();
+  const status=document.getElementById('reddit-status');
+  if(status)status.textContent='V1 seed model rendered. Live Reddit API/backtest still needed before showing real verified usernames.';
+  const el=document.getElementById('reddit-scout-list');
+  if(!el)return;
+  const rows=[...REDDIT_SCOUTS].map(s=>({...s,setup:redditScoutScore(s)})).sort((a,b)=>b.setup.score-a.setup.score);
+  el.innerHTML=rows.map(s=>{
+    const setup=s.setup;
+    const tickerButtons=(s.tickers||[]).map(t=>`<button class="btn" onclick="event.stopPropagation();redditTickerResearch('${esc(t)}')">${esc(t)}</button>`).join('');
+    const watchButtons=(s.tickers||[]).slice(0,3).map(t=>`<button class="btn" onclick="event.stopPropagation();redditTickerWatchlist('${esc(t)}')">Watch ${esc(t)}</button>`).join('');
+    return `<div class="op-card">
+      <div class="op-head" onclick="toggleCard(this)">
+        <div>
+          <div class="op-ticker">${esc(s.username)} <span style="font-size:10px;color:#3a3d6a;">${esc(s.specialty)}</span></div>
+          <div class="op-sub">${esc(s.status)} · ${esc((s.subreddits||[]).join(', '))} · ${s.measuredCalls} measured calls · hype risk ${s.hypeRisk}/100</div>
+          <div class="op-chip-row">
+            <span class="op-chip">Win rate ${s.winRate}%</span>
+            <span class="op-chip">Avg 6M alpha ${s.avgOutperformance>=0?'+':''}${s.avgOutperformance}%</span>
+            <span class="op-chip">Early ${s.earlyScore}</span>
+            <span class="op-chip">Specificity ${s.specificity}</span>
+            <span class="op-chip">Risk honesty ${s.riskHonesty}</span>
+          </div>
+        </div>
+        <div>
+          <div class="op-score" style="color:${setup.color};">${setup.score}</div>
+          <div class="op-label" style="color:${setup.color};">${setup.label}</div>
+        </div>
+      </div>
+      <div class="op-details">
+        <div class="detail-grid">
+          <div class="detail-box"><div class="detail-label">SCOUT READ</div><div class="detail-text"><span style="color:${setup.color};">${setup.label}</span> · ${esc(setup.copy)} ${esc(s.note)}</div></div>
+          <div class="detail-box"><div class="detail-label">SCORE BREAKDOWN</div><div class="detail-text">Sample ${setup.sample}/100 · Consistency ${setup.consistency}/100 · Thesis quality ${setup.thesis}/100 · Anti-hype ${setup.antiHype}/100.</div></div>
+          <div class="detail-box"><div class="detail-label">BEST EARLY CALL</div><div class="detail-text">${esc(s.bestCall)}</div></div>
+          <div class="detail-box"><div class="detail-label">WORST / RISK CHECK</div><div class="detail-text">${esc(s.worstCall)}</div></div>
+          <div class="detail-box"><div class="detail-label">TICKERS TO RESEARCH</div><div class="detail-text">${(s.tickers||[]).map(esc).join(', ')}</div></div>
+          <div class="detail-box"><div class="detail-label">VERIFICATION NEEDED</div><div class="detail-text">Replace this seed profile with real post IDs, original timestamps, archived text, post-time price, later returns, benchmark alpha, and deleted/edited-post checks.</div></div>
+        </div>
+        <div class="research-actions">${tickerButtons}${watchButtons}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
 function renderEmergingLeaders(){
   const rows=[...EMERGING_LEADERS].sort((a,b)=>b.leader-a.leader);
   const el=document.getElementById('emerging-list');
@@ -2174,16 +2354,18 @@ function renderEmergingLeaders(){
   el.innerHTML=rows.map(item=>{
     const move=liveChangeFor(item.ticker);
     const valuation=valuationGuardrailFor(item.ticker,item.theme,52,move).score;
-    const entry=entryQualityScore(move,valuation,item.revenue);
-    const entryRead=entryQualityRead(move,entry);
+    const distanceFromHigh=distanceFromHighFor(item.ticker);
+    const entry=entryQualityScore(move,valuation,item.revenue,distanceFromHigh);
+    const entryRead=entryQualityRead(move,entry,distanceFromHigh);
     const business=businessQualityScore({quality:item.revenue,thesis:item.leader,macro:item.narrative,confidence:item.institutional});
     const a=emergingAction(item,entry);
+    const highTag=highDiscountHtml(item.ticker);
     const retailNote=item.retail>=80?'Retail sentiment is hot; require better entry discipline.':item.retail<=45?'Retail attention is low; could be early if fundamentals are improving.':'Retail sentiment is present but not overheated.';
     return `<div class="op-card">
       <div class="op-head" onclick="toggleCard(this)">
         <div>
           <div class="op-ticker">${item.ticker} <span style="font-size:10px;color:#3a3d6a;">${item.name}</span></div>
-          <div class="op-sub">${item.theme}${Number.isFinite(move)?` · ${moveHtml(move)}`:''} · <span style="color:${entryRead.color};">${entryRead.label}</span></div>
+          <div class="op-sub">${item.theme}${Number.isFinite(move)?` · ${moveHtml(move,'1D')}`:''}${highTag?` · ${highTag}`:''} · <span style="color:${entryRead.color};">${entryRead.label}</span></div>
         </div>
         <div>
           <div class="op-score" style="color:${a.color};">${business}</div>
@@ -2193,7 +2375,7 @@ function renderEmergingLeaders(){
       <div class="op-details">
         <div class="detail-grid">
           <div class="detail-box"><div class="detail-label">BUSINESS QUALITY</div><div class="detail-text">${business}/100 · Narrative strength ${item.narrative}/100 · Revenue acceleration ${item.revenue}/100 · Guidance/estimate revision signal ${item.guidance}/100.</div></div>
-          <div class="detail-box"><div class="detail-label">ENTRY QUALITY</div><div class="detail-text"><span style="color:${entryRead.color};">${entry}/100 · ${entryRead.label}</span>. ${entryRead.copy}<br>${item.entry}</div></div>
+          <div class="detail-box"><div class="detail-label">ENTRY QUALITY</div><div class="detail-text"><span style="color:${entryRead.color};">${entry}/100 · ${entryRead.label}</span>. ${entryRead.copy} ${esc(highDiscountCopy(distanceFromHigh))}<br>${item.entry}</div></div>
           <div class="detail-box"><div class="detail-label">SENTIMENT CHECK</div><div class="detail-text">Retail sentiment ${item.retail}/100. ${retailNote} Institutional signal ${item.institutional}/100.</div></div>
           <div class="detail-box"><div class="detail-label">ACTION LOGIC</div><div class="detail-text"><span style="color:${a.color};">${a.label}</span> · ${a.copy}</div></div>
           <div class="detail-box"><div class="detail-label">WHAT COULD BREAK IT</div><div class="detail-text">${item.risk}</div></div>
@@ -2301,11 +2483,12 @@ function watchlistScore(item){
   const q=window._screenerData?.[item.ticker]||null;
   const move=q?.changePercent??liveChangeFor(item.ticker)??opp?.drop??0;
   const price=q?.price??livePriceFor(item.ticker);
+  const distanceFromHigh=q?.distanceFromHigh??distanceFromHighFor(item.ticker);
   const rawValuation=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:RESEARCH_SCORE_DEFAULTS[item.ticker]?.valuation??wider?.valuation??50));
   const valuationGuard=valuationGuardrailFor(item.ticker,item.category||profile.type,rawValuation,move);
   const valuation=valuationGuard.score;
-  const entry=entryQualityScore(move,valuation,profile.fundamental??opp?.quality??emerging?.revenue??wider?.quality??55);
-  const entryRead=entryQualityRead(move,entry);
+  const entry=entryQualityScore(move,valuation,profile.fundamental??opp?.quality??emerging?.revenue??wider?.quality??55,distanceFromHigh);
+  const entryRead=entryQualityRead(move,entry,distanceFromHigh);
   const macro=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:RESEARCH_SCORE_DEFAULTS[item.ticker]?.macro??emerging?.narrative??wider?.macro??55));
   const opportunity=clamp(opp?opportunityScore({...opp,drop:move}):profile.opportunity??(emerging?emerging.leader-8:wider?wideBaseOpportunity(wider,move):45));
   const quality=clamp(profile.fundamental??opp?.quality??emerging?.revenue??wider?.quality??55);
@@ -2341,7 +2524,7 @@ function watchlistScore(item){
     downEnough:Number.isFinite(move)&&move<=-4,
     context:'watchlist'
   });
-  return {score:adjusted,action:adjustedAction,price,move,quality,business,thesis,valuation,entry,entryRead,macro,opportunity,technical,history,outcomes,confidence,regime,portfolio,valuationGuard};
+  return {score:adjusted,action:adjustedAction,price,move,distanceFromHigh,quality,business,thesis,valuation,entry,entryRead,macro,opportunity,technical,history,outcomes,confidence,regime,portfolio,valuationGuard};
 }
 function wideBaseOpportunity(item,move){
   const technical=Number.isFinite(move)&&move<0?Math.min(12,Math.abs(move)*1.4):0;
@@ -2388,11 +2571,12 @@ function candidateBaseScore(symbol,source,item=null){
   const valuation=clamp(profile.valuationScore??(typeof profile.valuation==='number'?profile.valuation:RESEARCH_SCORE_DEFAULTS[s]?.valuation??50));
   const macro=clamp(profile.macroScore??(typeof profile.macro==='number'?profile.macro:RESEARCH_SCORE_DEFAULTS[s]?.macro??50));
   const move=liveChangeFor(s);
-  const entry=entryQualityScore(move,valuation,profile.fundamental);
+  const distanceFromHigh=distanceFromHighFor(s);
+  const entry=entryQualityScore(move,valuation,profile.fundamental,distanceFromHigh);
   const business=businessQualityScore({quality:profile.fundamental,thesis:profile.thesis,macro,confidence:profile.confidence||55});
   const profileScore=Math.round(clamp(profile.fundamental*0.25+profile.thesis*0.25+valuation*0.18+macro*0.12+(profile.opportunity||50)*0.20));
   const action=researchDecision(profileScore,'new',{business,entry,thesisDamaged:profile.thesis<50||profile.fundamental<50,speculative:isSpeculativeCandidate(`${profile.ticker} ${profile.type} ${profile.risks}`,profile.fundamental,profile.confidence||55),hasLiveNews:false,downEnough:Number.isFinite(move)&&move<=-4});
-  return {score:profileScore,action,price:livePriceFor(s),move,business,entry,entryRead:entryQualityRead(move,entry),reason:profile.summary||'Owned position scored from local research profile.'};
+  return {score:profileScore,action,price:livePriceFor(s),move,distanceFromHigh,business,entry,entryRead:entryQualityRead(move,entry,distanceFromHigh),reason:profile.summary||'Owned position scored from local research profile.'};
 }
 function nextDollarAction(score,currentAlloc,target,max){
   if(currentAlloc>=max)return {label:'DO NOT ADD',color:'#A32D2D',copy:'Already above max sleeve size. New money should go elsewhere unless target weights change.'};
@@ -2466,7 +2650,7 @@ function buildNextDollarCandidates(){
       score:finalScore,
       baseScore:base.score,
       action,
-      reason:[base.action?.copy||base.reason||'Ranked from local score inputs.',allocationNote,Number.isFinite(base.business)?`Business Quality ${Math.round(base.business)}/100.`:'',base.entryRead?`Entry: ${base.entryRead.label}. ${base.entryRead.copy}`:'',base.regime?.note,base.portfolio?.note,base.valuationGuard?.note].filter(Boolean).join(' '),
+      reason:[base.action?.copy||base.reason||'Ranked from local score inputs.',allocationNote,Number.isFinite(base.business)?`Business Quality ${Math.round(base.business)}/100.`:'',base.entryRead?`Entry: ${base.entryRead.label}. ${base.entryRead.copy}`:'',highDiscountCopy(base.distanceFromHigh),base.regime?.note,base.portfolio?.note,base.valuationGuard?.note].filter(Boolean).join(' '),
       currentAlloc:alloc,
       currentValue:value,
       target:target.target,
@@ -2517,7 +2701,8 @@ function renderWatchlist(){
   if(!rows.length){el.innerHTML='<div class="card"><p class="section-label">WATCHLIST EMPTY</p><p style="font-size:12px;color:#5a5d8a;">Add tickers from Opportunities, Emerging Leaders, or the manual box above.</p></div>';return;}
   el.innerHTML=rows.map(({item,score})=>{
     const price=score.price?priceHtml(score.price):'<span class="price-text">Price unavailable</span>';
-    const move=score.move!=null?moveHtml(score.move):'<span class="move-flat">Move unavailable</span>';
+    const move=score.move!=null?moveHtml(score.move,'1D'):'<span class="move-flat">Move unavailable</span>';
+    const highTag=highDiscountHtml(item.ticker);
     const added=item.addedAt?new Date(item.addedAt).toLocaleDateString():'starter';
     const stored=userWatchlist().some(r=>r.ticker===item.ticker);
     const scores=[
@@ -2528,7 +2713,7 @@ function renderWatchlist(){
       <div class="op-head" onclick="toggleCard(this)">
         <div>
           <div class="op-ticker">${esc(item.ticker)} <span style="font-size:10px;color:#3a3d6a;">${esc(item.name)}</span></div>
-          <div class="op-sub">${sectorHtml(item.category||'Watchlist')} · ${price} · ${move} · ${esc(item.source||'Manual')}</div>
+          <div class="op-sub">${sectorHtml(item.category||'Watchlist')} · ${price} · ${move}${highTag?` · ${highTag}`:''} · ${esc(item.source||'Manual')}</div>
         </div>
         <div>
           <div class="op-score" style="color:${score.action.color};">${score.score}</div>
@@ -2538,7 +2723,7 @@ function renderWatchlist(){
       <div class="op-details">
         <div class="research-score-grid">${scores}</div>
         <div class="detail-grid">
-          <div class="detail-box"><div class="detail-label">PULL-TRIGGER READ</div><div class="detail-text">${esc(score.action.copy)} Business Quality ${score.business}/100 · Entry ${score.entry}/100 · ${esc(score.entryRead.label)}. Opportunity score ${score.opportunity}/100 · confidence ${score.confidence}/100.</div></div>
+          <div class="detail-box"><div class="detail-label">PULL-TRIGGER READ</div><div class="detail-text">${esc(score.action.copy)} Business Quality ${score.business}/100 · Entry ${score.entry}/100 · ${esc(score.entryRead.label)}. ${esc(highDiscountCopy(score.distanceFromHigh))} Opportunity score ${score.opportunity}/100 · confidence ${score.confidence}/100.</div></div>
           <div class="detail-box"><div class="detail-label">WHY IT'S HERE</div><div class="detail-text">${esc(item.notes||'No note yet.')}</div></div>
           <div class="detail-box"><div class="detail-label">THEME / MACRO</div><div class="detail-text">${esc(item.theme||themeFor(item.ticker))}</div></div>
           <div class="detail-box"><div class="detail-label">HISTORY / OUTCOMES</div><div class="detail-text">${esc(score.history.label)} · ${esc(score.outcomes?.label||'No outcome history yet')}. Saved snapshots make this smarter over time.</div></div>
@@ -2598,7 +2783,8 @@ function researchFromApi(d){
   const horizon=document.getElementById('research-horizon')?.value||'long';
   const notes=document.getElementById('research-notes')?.value||'';
   const liveDrop=d.quote?.changePercent??null;
-  const entry=entryQualityScore(liveDrop,d.valuationScore,d.fundamental);
+  const distanceFromHigh=d.quote?.distanceFromHigh??distanceFromHighFor(d.symbol);
+  const entry=entryQualityScore(liveDrop,d.valuationScore,d.fundamental,distanceFromHigh);
   const business=businessQualityScore({quality:d.fundamental,thesis:d.thesis,macro:d.macroScore,confidence:d.confidence||55});
   const dropBoost=liveDrop<0?Math.min(10,Math.abs(liveDrop)*1.2):Math.max(-6,-Math.abs(liveDrop||0)*0.6);
   const score=Math.round(clamp(
@@ -2625,7 +2811,8 @@ function researchFromApi(d){
     confidence:d.confidence,
     business,
     entry,
-    entryRead:entryQualityRead(liveDrop,entry),
+    entryRead:entryQualityRead(liveDrop,entry,distanceFromHigh),
+    distanceFromHigh,
     summary:d.summary,
     bull:d.bull,
     bear:d.bear,
@@ -2657,18 +2844,19 @@ function buildResearch(symbol){
   const q=window._screenerData?.[profile.ticker]||null;
   const liveDrop=q?.changePercent??liveChangeFor(profile.ticker);
   const price=q?.price??livePriceFor(profile.ticker);
+  const distanceFromHigh=q?.distanceFromHigh??distanceFromHighFor(profile.ticker);
   const notes=document.getElementById('research-notes')?.value||'';
   const context=document.getElementById('research-context')?.value||'new';
   const horizon=document.getElementById('research-horizon')?.value||'long';
   const dropBoost=liveDrop<0?Math.min(12,Math.abs(liveDrop)*1.4):Math.max(-8,-Math.abs(liveDrop||0)*0.8);
   const specPenalty=horizon==='spec'?0:profile.fundamental<60?-8:0;
-  const entry=entryQualityScore(liveDrop,valuationScore,profile.fundamental);
+  const entry=entryQualityScore(liveDrop,valuationScore,profile.fundamental,distanceFromHigh);
   const business=businessQualityScore({quality:profile.fundamental,thesis:profile.thesis,macro:macroScore,confidence:profile.confidence||55});
   const score=Math.round(clamp(profile.fundamental*0.25+profile.thesis*0.25+valuationScore*0.18+macroScore*0.12+profile.opportunity*0.20+dropBoost+specPenalty));
   const thesisDamaged=profile.thesis<50||profile.fundamental<50;
   const decision=researchDecision(score,context,{business,entry,thesisDamaged,speculative:horizon==='spec'||isSpeculativeCandidate(`${profile.ticker} ${profile.type} ${profile.risks}`,profile.fundamental,profile.confidence||55),hasLiveNews:false,downEnough:Number.isFinite(liveDrop)&&liveDrop<=-4});
   const bestAlt=rankedOpportunities().find(x=>x.ticker!==profile.ticker);
-  return {...profile,valuationScore,macroScore,valuationText,macroText,business,entry,entryRead:entryQualityRead(liveDrop,entry),score,decision,price,liveDrop,notes,context,horizon,bestAlt,createdAt:new Date().toISOString()};
+  return {...profile,valuationScore,macroScore,valuationText,macroText,business,entry,entryRead:entryQualityRead(liveDrop,entry,distanceFromHigh),distanceFromHigh,score,decision,price,liveDrop,notes,context,horizon,bestAlt,createdAt:new Date().toISOString()};
 }
 async function fetchLiveResearch(symbol){
   const r=await fetch('/api/research?symbol='+encodeURIComponent(symbol)+'&ts='+Date.now());
@@ -2677,10 +2865,11 @@ async function fetchLiveResearch(symbol){
 }
 function renderResearchCard(r){
   const scores=[
-    ['Business',r.business??businessQualityScore({quality:r.fundamental,thesis:r.thesis,macro:r.macroScore,confidence:r.confidence||55})],['Entry',r.entry??entryQualityScore(r.liveDrop,r.valuationScore,r.fundamental)],['Fundamental',r.fundamental],['Thesis',r.thesis],['Valuation',r.valuationScore],['Macro',r.macroScore],['Opportunity',r.opportunity]
+    ['Business',r.business??businessQualityScore({quality:r.fundamental,thesis:r.thesis,macro:r.macroScore,confidence:r.confidence||55})],['Entry',r.entry??entryQualityScore(r.liveDrop,r.valuationScore,r.fundamental,r.distanceFromHigh)],['Fundamental',r.fundamental],['Thesis',r.thesis],['Valuation',r.valuationScore],['Macro',r.macroScore],['Opportunity',r.opportunity]
   ].map(([label,val])=>`<div class="research-score"><div class="detail-label">${label.toUpperCase()}</div><div class="research-score-num" style="color:${col(val)};">${Math.round(val)}</div></div>`).join('');
   const priceLine=r.price?priceHtml(r.price):'<span class="price-text">Price unavailable</span>';
-  const moveLine=r.liveDrop!=null?`${moveHtml(r.liveDrop)} recent move`:'<span class="move-flat">No live move available</span>';
+  const moveLine=r.liveDrop!=null?`${moveHtml(r.liveDrop,'1D')} recent move`:'<span class="move-flat">No live move available</span>';
+  const highLine=Number.isFinite(Number(r.distanceFromHigh))&&Number(r.distanceFromHigh)<-1?` · <span class="${Number(r.distanceFromHigh)<=-10?'move-up':Number(r.distanceFromHigh)<=-5?'move-flat':'move-down'}">${Math.abs(Number(r.distanceFromHigh)).toFixed(1)}% below 52W high</span>`:'';
   const alt=r.bestAlt?`${r.bestAlt.ticker} (${opportunityActionFor(r.bestAlt).label}, score ${r.bestAlt.score})`:'cash / wait';
   const newsHtml=(r.news||[]).slice(0,4).map(n=>`${n.link?`<a href="${esc(n.link)}" target="_blank" rel="noopener" style="color:#9a9dcc;text-decoration:none;">${esc(n.title)}</a>`:esc(n.title)}<br><span style="color:#3a3d6a;">${esc(n.source||'News')}${Number.isFinite(n.ageHours)?' · '+n.ageHours.toFixed(1)+'h old':''}${n.thesisRisk?' · '+esc(n.thesisRisk):''}</span>`).join('<br><br>')||'No fresh headline found.';
   const filingsHtml=(r.filings||[]).slice(0,5).map(f=>`${esc(f.form)} · ${esc(f.filed||'')}`).join('<br>')||'SEC filings unavailable.';
@@ -2691,8 +2880,8 @@ function renderResearchCard(r){
       <div class="score-mini-num" style="color:${r.decision.color};">${r.score}</div>
       <div>
         <div style="font-size:13px;color:${r.decision.color};letter-spacing:0.12em;margin-bottom:4px;">${esc(r.ticker)} · ${r.decision.label}</div>
-        <div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${esc(r.name)} · ${sectorHtml(r.type)} · ${priceLine} · ${moveLine}</div>
-        <div style="font-size:11px;color:#7a7daa;margin-top:4px;line-height:1.6;">${esc(r.decision.copy)} ${r.entryRead?`Entry: ${esc(r.entryRead.label)}.`:''}</div>
+        <div style="font-size:11px;color:#5a5d8a;line-height:1.6;">${esc(r.name)} · ${sectorHtml(r.type)} · ${priceLine} · ${moveLine}${highLine}</div>
+        <div style="font-size:11px;color:#7a7daa;margin-top:4px;line-height:1.6;">${esc(r.decision.copy)} ${r.entryRead?`Entry: ${esc(r.entryRead.label)}.`:''} ${esc(highDiscountCopy(r.distanceFromHigh))}</div>
       </div>
     </div>
     <div class="research-score-grid">${scores}</div>
@@ -3442,7 +3631,7 @@ async function loadScreener(force=false){
 function liveChangeFor(ticker){
   const q=window._screenerData[ticker];
   if(!q||q.changePercent==null)return null;
-  return q.changePercent; // already as percent, e.g. -6.3
+  return q.changePercent; // 1D percent vs previous close, e.g. -6.3
 }
 function livePriceFor(ticker){
   const q=window._screenerData[ticker];
@@ -3463,6 +3652,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   try{renderResearchHistory();}catch(e){}
   try{renderWatchlist();}catch(e){}
   try{renderEmergingLeaders();}catch(e){}
+  try{renderRedditScout();}catch(e){}
   try{renderPortfolio();}catch(e){}
   try{renderMemorySnapshots();}catch(e){}
   try{renderDataHealth();}catch(e){}

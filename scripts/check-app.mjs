@@ -151,10 +151,15 @@ function browserLogicSmoke(script) {
     { label: 'ADD ON PULLBACK', color: '#639922', copy: 'entry is not clean enough yet' },
     50
   );
+  const greenNearHighScore = context.entryQualityScore(3.4, 60, 85, -1);
+  const greenBelowHighScore = context.entryQualityScore(3.4, 60, 85, -15);
+  const greenBelowHighRead = context.entryQualityRead(3.4, greenBelowHighScore, -15);
   assert(greatButExtended.label === 'WAIT / EXTENDED', 'Great business with poor entry should wait, not avoid');
   assert(damaged.label === 'AVOID / THESIS DAMAGED', 'Avoid should be reserved for thesis damage');
   assert(improving.label === 'BUY STARTER', 'High quality with improved entry should become buy starter');
   assert(cappedNextDollar.label !== 'BUY STARTER', 'Best Next Dollar should not promote weak/neutral entry into buy starter');
+  assert(greenBelowHighScore > greenNearHighScore, 'Stocks still below highs should get better entry scores than near-high stocks');
+  assert(greenBelowHighRead.label !== 'Entry extended', 'Green day should not force extended label when stock is still below highs');
   assert(context.bgeometricsUrls('nupl').some(url => url.includes('btcscore.vercel.app')), 'Local/file BGeometrics calls should fall back to deployed API');
 
   return context.loadScreener()

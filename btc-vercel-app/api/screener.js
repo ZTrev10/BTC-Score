@@ -132,6 +132,8 @@ function normalizeQuote(row, symbol) {
   const price = Number(row.regularMarketPrice);
   const changePercent = Number(row.regularMarketChangePercent);
   const marketTime = Number(row.regularMarketTime);
+  const fiftyTwoWeekHigh = Number(row.fiftyTwoWeekHigh);
+  const fiftyTwoWeekLow = Number(row.fiftyTwoWeekLow);
   if (!Number.isFinite(price)) return null;
   return {
     symbol,
@@ -142,9 +144,23 @@ function normalizeQuote(row, symbol) {
     volume: Number(row.regularMarketVolume) || null,
     dayLow: Number(row.regularMarketDayLow) || null,
     dayHigh: Number(row.regularMarketDayHigh) || null,
+    fiftyTwoWeekHigh: Number.isFinite(fiftyTwoWeekHigh) ? fiftyTwoWeekHigh : null,
+    fiftyTwoWeekLow: Number.isFinite(fiftyTwoWeekLow) ? fiftyTwoWeekLow : null,
+    distanceFromHigh: Number.isFinite(fiftyTwoWeekHigh) && fiftyTwoWeekHigh > 0 ? ((price - fiftyTwoWeekHigh) / fiftyTwoWeekHigh) * 100 : null,
     quoteTime: Number.isFinite(marketTime) ? new Date(marketTime * 1000).toISOString() : null,
-    source: 'yahoo-quote'
+    source: 'yahoo-quote',
+    changeBasis: '1D vs previous close'
   };
+}
+
+function previousDailyClose(closes = [], currentPrice = null) {
+  const valid = closes.map(Number).filter(Number.isFinite);
+  if (!valid.length) return null;
+  const last = valid[valid.length - 1];
+  if (Number.isFinite(currentPrice) && Math.abs(last - currentPrice) / Math.max(1, currentPrice) < 0.0005 && valid.length >= 2) {
+    return valid[valid.length - 2];
+  }
+  return last;
 }
 
 async function fetchChartQuote(symbol) {
@@ -158,8 +174,10 @@ async function fetchChartQuote(symbol) {
   const meta = result?.meta || {};
   const quote = result?.indicators?.quote?.[0] || {};
   const price = meta.regularMarketPrice ?? null;
-  const prevClose = meta.chartPreviousClose ?? null;
+  const prevClose = meta.regularMarketPreviousClose ?? meta.previousClose ?? previousDailyClose(quote.close || [], price) ?? null;
   const changePercent = price != null && prevClose ? ((price - prevClose) / prevClose) * 100 : null;
+  const fiftyTwoWeekHigh = Number(meta.fiftyTwoWeekHigh);
+  const fiftyTwoWeekLow = Number(meta.fiftyTwoWeekLow);
   return {
     symbol,
     name: meta.shortName || meta.longName || COMPANY_HINTS[symbol] || symbol,
@@ -169,8 +187,12 @@ async function fetchChartQuote(symbol) {
     volume: meta.regularMarketVolume ?? quote.volume?.at?.(-1) ?? null,
     dayLow: meta.regularMarketDayLow ?? quote.low?.at?.(-1) ?? null,
     dayHigh: meta.regularMarketDayHigh ?? quote.high?.at?.(-1) ?? null,
+    fiftyTwoWeekHigh: Number.isFinite(fiftyTwoWeekHigh) ? fiftyTwoWeekHigh : null,
+    fiftyTwoWeekLow: Number.isFinite(fiftyTwoWeekLow) ? fiftyTwoWeekLow : null,
+    distanceFromHigh: Number.isFinite(fiftyTwoWeekHigh) && fiftyTwoWeekHigh > 0 && Number.isFinite(Number(price)) ? ((Number(price) - fiftyTwoWeekHigh) / fiftyTwoWeekHigh) * 100 : null,
     quoteTime: meta.regularMarketTime ? new Date(Number(meta.regularMarketTime) * 1000).toISOString() : null,
-    source: 'yahoo-chart'
+    source: 'yahoo-chart',
+    changeBasis: '1D vs previous close'
   };
 }
 
