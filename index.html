@@ -522,10 +522,17 @@ td strong{color:#c8caee;font-weight:500;}
     </div>
     <div class="research-actions">
       <button class="btn" onclick="runRedditPriceBacktest()">Run Price Backtest</button>
+      <button class="btn" onclick="downloadRedditScoutReport()">Download Scout Report</button>
       <button class="btn" onclick="clearRedditBacktest()">Clear Reddit Data</button>
     </div>
     <div class="status" id="reddit-import-status">No Reddit backtest file loaded.</div>
     <div id="reddit-import-summary"></div>
+  </div>
+
+  <div class="card">
+    <p class="section-label">TOP SCOUT REPORT</p>
+    <p style="font-size:11px;color:#3a3d6a;line-height:1.6;margin-bottom:10px;">Ranked summary of imported/backtested users. Names remain masked until the reveal rule is satisfied.</p>
+    <div id="reddit-scout-report"></div>
   </div>
 
   <div id="reddit-scout-list"></div>
@@ -2551,6 +2558,61 @@ function renderRedditReceipts(receipts=[]){
     return `${esc(r.ticker)} · ${new Date(r.createdAt).toLocaleDateString()} · ${win} alpha ${Number(alpha).toFixed(1)}% ${esc(bench)}${title}${link}`;
   }).join('<br>');
 }
+function redditReportRows(rows){
+  return rows
+    .filter(s=>s.status?.startsWith('Imported')||s.measuredCalls>0)
+    .sort((a,b)=>b.setup.score-a.setup.score)
+    .slice(0,12);
+}
+function renderRedditScoutReport(rows=[]){
+  const el=document.getElementById('reddit-scout-report');
+  if(!el)return;
+  const report=redditReportRows(rows);
+  if(!report.length){
+    el.innerHTML='<div class="brief-empty">Import Reddit data and run a price backtest to generate the ranked scout report.</div>';
+    return;
+  }
+  el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Rank</th><th>User</th><th>Label</th><th>Score</th><th>Measured</th><th>Win</th><th>Alpha</th><th>Top Tickers</th></tr></thead><tbody>${report.map((s,i)=>`<tr>
+    <td>${i+1}</td>
+    <td><strong>${esc(s.setup.displayName)}</strong></td>
+    <td>${esc(s.setup.label)}</td>
+    <td>${s.setup.score}</td>
+    <td>${s.measuredCalls}</td>
+    <td>${Number.isFinite(Number(s.winRate))?Number(s.winRate).toFixed(0)+'%':'—'}</td>
+    <td>${Number.isFinite(Number(s.avgOutperformance))?(Number(s.avgOutperformance)>=0?'+':'')+Number(s.avgOutperformance).toFixed(1)+'%':'—'}</td>
+    <td>${(s.tickers||[]).slice(0,4).map(esc).join(', ')}</td>
+  </tr>`).join('')}</tbody></table></div>`;
+}
+function downloadRedditScoutReport(){
+  const imported=redditImportedScouts();
+  const rows=redditReportRows(imported.map(s=>({...s,setup:redditScoutScore(s)})));
+  if(!rows.length){
+    const status=document.getElementById('reddit-import-status');
+    if(status)status.textContent='Run a Reddit price backtest before downloading a scout report.';
+    return;
+  }
+  const header=['rank','display_user','reveal_eligible','label','score','measured_calls','win_rate','avg_alpha','top_tickers','best_call','worst_call'];
+  const csv=[header.join(',')].concat(rows.map((s,i)=>[
+    i+1,
+    s.setup.displayName,
+    s.setup.revealEligible?'yes':'no',
+    s.setup.label,
+    s.setup.score,
+    s.measuredCalls,
+    s.winRate,
+    s.avgOutperformance,
+    (s.tickers||[]).join('|'),
+    s.bestCall,
+    s.worstCall
+  ].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`reddit-scout-report-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},0);
+}
 function renderRedditScout(){
   renderRedditMethodology();
   renderRedditImportSummary();
@@ -2561,6 +2623,7 @@ function renderRedditScout(){
   const imported=redditImportedScouts();
   const rows=[...imported,...REDDIT_SCOUTS].map(s=>({...s,setup:redditScoutScore(s)})).sort((a,b)=>b.setup.score-a.setup.score);
   renderRedditUserGate(rows);
+  renderRedditScoutReport(rows);
   el.innerHTML=rows.map(s=>{
     const setup=s.setup;
     const tickerButtons=(s.tickers||[]).map(t=>`<button class="btn" onclick="event.stopPropagation();redditTickerResearch('${esc(t)}')">${esc(t)}</button>`).join('');
