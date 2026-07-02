@@ -501,6 +501,14 @@ td strong{color:#c8caee;font-weight:500;}
     <div id="reddit-methodology"></div>
   </div>
 
+  <div class="card">
+    <p class="section-label">IMPORT REDDIT BACKTEST DATA</p>
+    <p style="font-size:11px;color:#5a5d8a;line-height:1.7;margin-bottom:8px;">Load a compliant CSV or JSON export of public Reddit posts. Expected fields: username, subreddit, createdAt, title, body, url, tickers, score, numComments. Usernames still stay hidden until verified.</p>
+    <input class="file-input" type="file" id="reddit-backtest-file" accept=".csv,.json,application/json,text/csv" onchange="importRedditBacktest(event)">
+    <div class="status" id="reddit-import-status">No Reddit backtest file loaded.</div>
+    <div id="reddit-import-summary"></div>
+  </div>
+
   <div id="reddit-scout-list"></div>
 
   <div class="card">
@@ -1923,6 +1931,7 @@ const RESEARCH_HISTORY_KEY='trevor_research_history_v1';
 const MEMORY_SNAPSHOTS_KEY='trevor_memory_snapshots_v1';
 const AUTO_MEMORY_SNAPSHOT_KEY='trevor_auto_memory_snapshot_date_v1';
 const WATCHLIST_STORAGE_KEY='trevor_watchlist_v1';
+const REDDIT_BACKTEST_STORAGE_KEY='trevor_reddit_backtest_v1';
 const RESEARCH_PROFILES={
   META:{name:'Meta Platforms',type:'Quality compounder',fundamental:90,thesis:86,valuation:68,macro:72,opportunity:70,summary:'Scaled ad network plus AI-enabled engagement and efficiency. Best when regulatory or reputation fear creates a valuation reset without breaking the core ad engine.',bull:'AI improves ad targeting, Reels monetization continues, WhatsApp and business messaging become larger profit pools, and Reality Labs losses stay contained.',bear:'Regulation, platform fatigue, capex intensity, or a failed metaverse/AI spending cycle could compress margins and multiple.',valuation:'Usually worth owning only with discipline. Strong business quality can justify a premium, but the best entries come after fear-driven drawdowns.',macro:'Sensitive to consumer ads, regulation, AI capex, and broad risk appetite.',risks:'Regulatory shocks, privacy changes, AI infrastructure spend, management capital allocation.'},
   COST:{name:'Costco',type:'Defensive compounder',fundamental:92,thesis:88,valuation:45,macro:78,opportunity:54,summary:'Exceptional membership model and customer loyalty. Usually a great business, but the stock often prices in that greatness.',bull:'Membership fee increases, traffic resilience, private label strength, and international growth keep compounding earnings.',bear:'Valuation can do most of the damage. If growth slows, even a wonderful business can underperform from a high multiple.',valuation:'Quality is obvious, so margin of safety is usually thin. Prefer adding on rare multiple compression.',macro:'Defensive in weak consumer environments, but not immune to wage, freight, or valuation pressure.',risks:'Premium valuation, slower same-store sales, margin pressure, limited surprise factor.'},
@@ -2307,6 +2316,117 @@ function redditTickerWatchlist(ticker){
   }
   switchTab('watchlist');
 }
+function storedRedditPosts(){
+  try{return JSON.parse(localStorage.getItem(REDDIT_BACKTEST_STORAGE_KEY)||'[]');}catch(e){return [];}
+}
+function saveRedditPosts(rows){
+  localStorage.setItem(REDDIT_BACKTEST_STORAGE_KEY,JSON.stringify(rows.slice(0,5000)));
+}
+function redditField(row,names){
+  const keys=Object.keys(row||{});
+  const found=keys.find(k=>names.some(n=>norm(k)===norm(n)||norm(k).includes(norm(n))));
+  return found?row[found]:'';
+}
+function tickersFromText(text=''){
+  const ignore=new Set(['A','AI','ARE','BE','BY','CAN','DD','DO','FOR','GO','HAS','HE','I','IN','IT','ON','OR','SO','THE','TO','USA','YOLO']);
+  const matches=String(text).match(/\$?[A-Z]{1,5}\b/g)||[];
+  return [...new Set(matches.map(x=>cleanSymbol(x.replace('$',''))).filter(x=>x.length>=2&&!ignore.has(x)))].slice(0,8);
+}
+function classifyRedditPost(post){
+  const text=`${post.title||''} ${post.body||''}`.toLowerCase();
+  const options=/(0dte|weekly|weeklies|calls?|puts?|straddle|strangle|leaps?|iv crush|gamma|theta|expiry|expiration|yolo)/.test(text);
+  const hype=/(moon|rocket|squeeze|short interest|diamond hands|bagholder|ten[- ]?bagger by|multibagger by friday|load up|can't lose)/.test(text);
+  const bear=/(bear case|downside|risk|risks|concern|margin pressure|debt|dilution|valuation risk|competition)/.test(text);
+  const dd=/(dd|due diligence|thesis|valuation|cash flow|fcf|backlog|guidance|revenue|margin|moat|tam|catalyst|earnings|10-k|10-q|sec filing)/.test(text);
+  if(options&&hype)return 'Options/Hype';
+  if(options)return 'Options Mention';
+  if(hype&&!dd)return 'Squeeze/Meme';
+  if(dd&&bear)return 'Real DD';
+  if(dd)return 'DD Candidate';
+  if(bear)return 'Bear Case';
+  return 'Casual Mention';
+}
+function normalizeRedditPost(row){
+  const title=String(redditField(row,['title','post_title'])||'').trim();
+  const body=String(redditField(row,['body','selftext','text','comment'])||'').trim();
+  const explicit=String(redditField(row,['tickers','ticker','symbols','cashtags'])||'').split(/[,\s;|]+/).map(x=>cleanSymbol(x.replace('$',''))).filter(Boolean);
+  const tickers=[...new Set([...explicit,...tickersFromText(`${title} ${body}`)])].slice(0,8);
+  const createdAt=redditField(row,['createdAt','created_utc','created','date','timestamp']);
+  const created=Number(createdAt);
+  const iso=Number.isFinite(created)&&created>1000000000?new Date(created*(created<10000000000?1000:1)).toISOString():new Date(createdAt||Date.now()).toISOString();
+  const post={username:String(redditField(row,['username','author','user'])||'unknown').replace(/^u\//,''),subreddit:String(redditField(row,['subreddit','community'])||'unknown'),createdAt:iso,title,body,url:String(redditField(row,['url','permalink','link'])||''),tickers,score:Number(redditField(row,['score','upvotes'])||0),numComments:Number(redditField(row,['numComments','num_comments','comments'])||0)};
+  post.kind=classifyRedditPost(post);
+  return post;
+}
+function redditRowsFromCsv(text){
+  const rows=parseCSV(text).filter(r=>r.some(c=>String(c||'').trim()));
+  if(rows.length<2)return [];
+  const header=rows[0];
+  return rows.slice(1).map(r=>Object.fromEntries(header.map((h,i)=>[h,r[i]||''])));
+}
+function redditRowsFromJson(text){
+  const parsed=JSON.parse(text);
+  if(Array.isArray(parsed))return parsed;
+  if(Array.isArray(parsed.posts))return parsed.posts;
+  if(Array.isArray(parsed.data))return parsed.data;
+  return [];
+}
+function redditImportedScouts(){
+  const posts=storedRedditPosts();
+  const byUser=new Map();
+  posts.forEach(p=>{
+    if(!p.username||p.username==='unknown')return;
+    if(!byUser.has(p.username))byUser.set(p.username,[]);
+    byUser.get(p.username).push(p);
+  });
+  return [...byUser.entries()].map(([username,items])=>{
+    const sorted=items.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+    const dd=items.filter(p=>['Real DD','DD Candidate','Bear Case'].includes(p.kind));
+    const options=items.filter(p=>/Options/.test(p.kind));
+    const hype=items.filter(p=>['Options/Hype','Squeeze/Meme'].includes(p.kind));
+    const tickerCounts={};
+    items.flatMap(p=>p.tickers||[]).forEach(t=>{tickerCounts[t]=(tickerCounts[t]||0)+1;});
+    const tickers=Object.entries(tickerCounts).sort((a,b)=>b[1]-a[1]).map(x=>x[0]).slice(0,6);
+    const lastActiveDays=Math.max(0,Math.round((Date.now()-new Date(sorted[0]?.createdAt||Date.now()).getTime())/86400000));
+    const first=new Date(sorted[sorted.length-1]?.createdAt||Date.now()).getTime();
+    const accountAgeYears=Math.max(0.1,(Date.now()-first)/(365.25*86400000));
+    const optionsMentionsPct=items.length?Math.round(options.length/items.length*100):0;
+    return {username,reveal:false,status:'Imported / needs price backtest',lastActiveDays,accountAgeYears,optionsMentionsPct,specialty:tickers.length?`Imported lead: ${tickers.join(', ')}`:'Imported Reddit lead',subreddits:[...new Set(items.map(p=>p.subreddit).filter(Boolean))].slice(0,4),clearCalls:dd.length,measuredCalls:0,ddPosts:dd.length,winRate:0,avgOutperformance:0,earlyScore:dd.length>=3?62:48,specificity:dd.length?68:42,riskHonesty:items.some(p=>p.kind==='Real DD'||p.kind==='Bear Case')?70:42,hypeRisk:Math.min(100,Math.round(hype.length/Math.max(1,items.length)*100)+optionsMentionsPct),tickers,bestCall:'Imported posts are parsed. Price-history backtest still needed before ranking calls.',worstCall:'No outcome history attached yet, so this user cannot be verified or revealed.',note:`${items.length} imported posts · ${dd.length} DD-like · ${options.length} options-related.`};
+  });
+}
+function renderRedditImportSummary(){
+  const el=document.getElementById('reddit-import-summary');
+  if(!el)return;
+  const posts=storedRedditPosts();
+  if(!posts.length){el.innerHTML='';return;}
+  const users=new Set(posts.map(p=>p.username).filter(Boolean));
+  const tickers=new Set(posts.flatMap(p=>p.tickers||[]));
+  const kinds=posts.reduce((acc,p)=>{acc[p.kind]=(acc[p.kind]||0)+1;return acc;},{});
+  el.innerHTML=`<div class="detail-grid" style="margin-top:10px;">
+    <div class="detail-box"><div class="detail-label">IMPORTED POSTS</div><div class="detail-text">${posts.length} posts · ${users.size} users · ${tickers.size} tickers.</div></div>
+    <div class="detail-box"><div class="detail-label">POST TYPES</div><div class="detail-text">${Object.entries(kinds).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)} ${v}`).join('<br>')}</div></div>
+    <div class="detail-box"><div class="detail-label">NEXT NEEDED</div><div class="detail-text">Attach historical prices and benchmark returns before any imported username can be revealed or marked verified.</div></div>
+  </div>`;
+}
+function importRedditBacktest(e){
+  const file=e.target.files[0]; if(!file)return;
+  const status=document.getElementById('reddit-import-status');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const text=String(ev.target.result||'');
+      const raw=/\.json$/i.test(file.name)?redditRowsFromJson(text):redditRowsFromCsv(text);
+      const posts=raw.map(normalizeRedditPost).filter(p=>p.username&&p.tickers.length);
+      if(!posts.length)throw new Error('No usable Reddit rows with username and ticker were found.');
+      saveRedditPosts(posts);
+      if(status)status.textContent=`Imported ${posts.length} Reddit posts from ${file.name}. Stored locally in this browser.`;
+      renderRedditScout();
+    }catch(err){
+      if(status)status.textContent='Import failed: '+(err.message||err);
+    }
+  };
+  reader.readAsText(file);
+}
 function renderRedditMethodology(){
   const el=document.getElementById('reddit-methodology');
   if(!el)return;
@@ -2333,11 +2453,13 @@ function renderRedditUserGate(rows=[]){
 }
 function renderRedditScout(){
   renderRedditMethodology();
+  renderRedditImportSummary();
   const status=document.getElementById('reddit-status');
   if(status)status.textContent='V1 seed model rendered. Live Reddit API/backtest still needed before showing real verified usernames.';
   const el=document.getElementById('reddit-scout-list');
   if(!el)return;
-  const rows=[...REDDIT_SCOUTS].map(s=>({...s,setup:redditScoutScore(s)})).sort((a,b)=>b.setup.score-a.setup.score);
+  const imported=redditImportedScouts();
+  const rows=[...imported,...REDDIT_SCOUTS].map(s=>({...s,setup:redditScoutScore(s)})).sort((a,b)=>b.setup.score-a.setup.score);
   renderRedditUserGate(rows);
   el.innerHTML=rows.map(s=>{
     const setup=s.setup;
