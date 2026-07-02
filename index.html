@@ -2432,7 +2432,8 @@ function redditImportedScouts(){
     const measuredCalls=Number(measured?.measuredCalls)||0;
     const winRate=Number.isFinite(Number(measured?.winRate))?Number(measured.winRate):0;
     const avgOutperformance=Number.isFinite(Number(measured?.avgOutperformance))?Number(measured.avgOutperformance):0;
-    const receipts=(receiptMap.get(username)||[]).filter(r=>Number.isFinite(r.alpha?.m6??r.alpha?.m3??r.alpha?.m1)).sort((a,b)=>(b.alpha?.m6??b.alpha?.m3??b.alpha?.m1??-999)-(a.alpha?.m6??a.alpha?.m3??a.alpha?.m1??-999)).slice(0,5);
+    const receiptAlpha=r=>r.alpha?.m6Sector??r.alpha?.m6??r.alpha?.m3Sector??r.alpha?.m3??r.alpha?.m1Sector??r.alpha?.m1;
+    const receipts=(receiptMap.get(username)||[]).filter(r=>Number.isFinite(receiptAlpha(r))).sort((a,b)=>receiptAlpha(b)-receiptAlpha(a)).slice(0,5);
     return {username,reveal:false,status:measuredCalls?'Imported / price backtested':'Imported / needs price backtest',lastActiveDays,accountAgeYears,optionsMentionsPct,specialty:tickers.length?`Imported lead: ${tickers.join(', ')}`:'Imported Reddit lead',subreddits:[...new Set(items.map(p=>p.subreddit).filter(Boolean))].slice(0,4),clearCalls:dd.length,measuredCalls,ddPosts:dd.length,winRate,avgOutperformance,earlyScore:dd.length>=3?68:48,specificity:dd.length?68:42,riskHonesty:items.some(p=>p.kind==='Real DD'||p.kind==='Bear Case')?70:42,hypeRisk:Math.min(100,Math.round(hype.length/Math.max(1,items.length)*100)+optionsMentionsPct),tickers,bestCall:measured?.bestCall||'Imported posts are parsed. Price-history backtest still needed before ranking calls.',worstCall:measured?.worstCall||'No outcome history attached yet, so this user cannot be verified or revealed.',receipts,note:`${items.length} imported posts · ${dd.length} DD-like · ${options.length} options-related${measuredCalls?` · ${measuredCalls} measured outcomes`:''}.`};
   });
 }
@@ -2542,11 +2543,12 @@ function renderRedditUserGate(rows=[]){
 function renderRedditReceipts(receipts=[]){
   if(!receipts.length)return 'No measured receipts yet. Run the price backtest after importing posts.';
   return receipts.map(r=>{
-    const alpha=r.alpha?.m6??r.alpha?.m3??r.alpha?.m1;
-    const win=r.alpha?.m6!=null?'6M':r.alpha?.m3!=null?'3M':'1M';
+    const alpha=r.alpha?.m6Sector??r.alpha?.m6??r.alpha?.m3Sector??r.alpha?.m3??r.alpha?.m1Sector??r.alpha?.m1;
+    const win=r.alpha?.m6Sector!=null||r.alpha?.m6!=null?'6M':r.alpha?.m3Sector!=null||r.alpha?.m3!=null?'3M':'1M';
+    const bench=r.alpha?.m6Sector!=null||r.alpha?.m3Sector!=null||r.alpha?.m1Sector!=null?`vs ${r.sectorBenchmark}`:'vs SPY/QQQ';
     const title=r.title?` · ${r.title.slice(0,90)}`:'';
     const link=r.url?` <a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:#9a9dcc;text-decoration:none;">post</a>`:'';
-    return `${esc(r.ticker)} · ${new Date(r.createdAt).toLocaleDateString()} · ${win} alpha ${Number(alpha).toFixed(1)}%${title}${link}`;
+    return `${esc(r.ticker)} · ${new Date(r.createdAt).toLocaleDateString()} · ${win} alpha ${Number(alpha).toFixed(1)}% ${esc(bench)}${title}${link}`;
   }).join('<br>');
 }
 function renderRedditScout(){
