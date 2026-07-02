@@ -505,6 +505,10 @@ td strong{color:#c8caee;font-weight:500;}
     <p class="section-label">IMPORT REDDIT BACKTEST DATA</p>
     <p style="font-size:11px;color:#5a5d8a;line-height:1.7;margin-bottom:8px;">Load a compliant CSV or JSON export of public Reddit posts. Expected fields: username, subreddit, createdAt, title, body, url, tickers, score, numComments. Usernames still stay hidden until verified.</p>
     <input class="file-input" type="file" id="reddit-backtest-file" accept=".csv,.json,application/json,text/csv" onchange="importRedditBacktest(event)">
+    <div class="research-actions">
+      <button class="btn" onclick="runRedditPriceBacktest()">Run Price Backtest</button>
+      <button class="btn" onclick="clearRedditBacktest()">Clear Reddit Data</button>
+    </div>
     <div class="status" id="reddit-import-status">No Reddit backtest file loaded.</div>
     <div id="reddit-import-summary"></div>
   </div>
@@ -1932,6 +1936,7 @@ const MEMORY_SNAPSHOTS_KEY='trevor_memory_snapshots_v1';
 const AUTO_MEMORY_SNAPSHOT_KEY='trevor_auto_memory_snapshot_date_v1';
 const WATCHLIST_STORAGE_KEY='trevor_watchlist_v1';
 const REDDIT_BACKTEST_STORAGE_KEY='trevor_reddit_backtest_v1';
+const REDDIT_BACKTEST_RESULTS_KEY='trevor_reddit_backtest_results_v1';
 const RESEARCH_PROFILES={
   META:{name:'Meta Platforms',type:'Quality compounder',fundamental:90,thesis:86,valuation:68,macro:72,opportunity:70,summary:'Scaled ad network plus AI-enabled engagement and efficiency. Best when regulatory or reputation fear creates a valuation reset without breaking the core ad engine.',bull:'AI improves ad targeting, Reels monetization continues, WhatsApp and business messaging become larger profit pools, and Reality Labs losses stay contained.',bear:'Regulation, platform fatigue, capex intensity, or a failed metaverse/AI spending cycle could compress margins and multiple.',valuation:'Usually worth owning only with discipline. Strong business quality can justify a premium, but the best entries come after fear-driven drawdowns.',macro:'Sensitive to consumer ads, regulation, AI capex, and broad risk appetite.',risks:'Regulatory shocks, privacy changes, AI infrastructure spend, management capital allocation.'},
   COST:{name:'Costco',type:'Defensive compounder',fundamental:92,thesis:88,valuation:45,macro:78,opportunity:54,summary:'Exceptional membership model and customer loyalty. Usually a great business, but the stock often prices in that greatness.',bull:'Membership fee increases, traffic resilience, private label strength, and international growth keep compounding earnings.',bear:'Valuation can do most of the damage. If growth slows, even a wonderful business can underperform from a high multiple.',valuation:'Quality is obvious, so margin of safety is usually thin. Prefer adding on rare multiple compression.',macro:'Defensive in weak consumer environments, but not immune to wage, freight, or valuation pressure.',risks:'Premium valuation, slower same-store sales, margin pressure, limited surprise factor.'},
@@ -2322,6 +2327,12 @@ function storedRedditPosts(){
 function saveRedditPosts(rows){
   localStorage.setItem(REDDIT_BACKTEST_STORAGE_KEY,JSON.stringify(rows.slice(0,5000)));
 }
+function storedRedditResults(){
+  try{return JSON.parse(localStorage.getItem(REDDIT_BACKTEST_RESULTS_KEY)||'null');}catch(e){return null;}
+}
+function saveRedditResults(data){
+  localStorage.setItem(REDDIT_BACKTEST_RESULTS_KEY,JSON.stringify(data));
+}
 function redditField(row,names){
   const keys=Object.keys(row||{});
   const found=keys.find(k=>names.some(n=>norm(k)===norm(n)||norm(k).includes(norm(n))));
@@ -2373,6 +2384,7 @@ function redditRowsFromJson(text){
 }
 function redditImportedScouts(){
   const posts=storedRedditPosts();
+  const resultMap=new Map((storedRedditResults()?.users||[]).map(u=>[u.username,u]));
   const byUser=new Map();
   posts.forEach(p=>{
     if(!p.username||p.username==='unknown')return;
@@ -2391,7 +2403,11 @@ function redditImportedScouts(){
     const first=new Date(sorted[sorted.length-1]?.createdAt||Date.now()).getTime();
     const accountAgeYears=Math.max(0.1,(Date.now()-first)/(365.25*86400000));
     const optionsMentionsPct=items.length?Math.round(options.length/items.length*100):0;
-    return {username,reveal:false,status:'Imported / needs price backtest',lastActiveDays,accountAgeYears,optionsMentionsPct,specialty:tickers.length?`Imported lead: ${tickers.join(', ')}`:'Imported Reddit lead',subreddits:[...new Set(items.map(p=>p.subreddit).filter(Boolean))].slice(0,4),clearCalls:dd.length,measuredCalls:0,ddPosts:dd.length,winRate:0,avgOutperformance:0,earlyScore:dd.length>=3?62:48,specificity:dd.length?68:42,riskHonesty:items.some(p=>p.kind==='Real DD'||p.kind==='Bear Case')?70:42,hypeRisk:Math.min(100,Math.round(hype.length/Math.max(1,items.length)*100)+optionsMentionsPct),tickers,bestCall:'Imported posts are parsed. Price-history backtest still needed before ranking calls.',worstCall:'No outcome history attached yet, so this user cannot be verified or revealed.',note:`${items.length} imported posts · ${dd.length} DD-like · ${options.length} options-related.`};
+    const measured=resultMap.get(username);
+    const measuredCalls=Number(measured?.measuredCalls)||0;
+    const winRate=Number.isFinite(Number(measured?.winRate))?Number(measured.winRate):0;
+    const avgOutperformance=Number.isFinite(Number(measured?.avgOutperformance))?Number(measured.avgOutperformance):0;
+    return {username,reveal:false,status:measuredCalls?'Imported / price backtested':'Imported / needs price backtest',lastActiveDays,accountAgeYears,optionsMentionsPct,specialty:tickers.length?`Imported lead: ${tickers.join(', ')}`:'Imported Reddit lead',subreddits:[...new Set(items.map(p=>p.subreddit).filter(Boolean))].slice(0,4),clearCalls:dd.length,measuredCalls,ddPosts:dd.length,winRate,avgOutperformance,earlyScore:dd.length>=3?68:48,specificity:dd.length?68:42,riskHonesty:items.some(p=>p.kind==='Real DD'||p.kind==='Bear Case')?70:42,hypeRisk:Math.min(100,Math.round(hype.length/Math.max(1,items.length)*100)+optionsMentionsPct),tickers,bestCall:measured?.bestCall||'Imported posts are parsed. Price-history backtest still needed before ranking calls.',worstCall:measured?.worstCall||'No outcome history attached yet, so this user cannot be verified or revealed.',note:`${items.length} imported posts · ${dd.length} DD-like · ${options.length} options-related${measuredCalls?` · ${measuredCalls} measured outcomes`:''}.`};
   });
 }
 function renderRedditImportSummary(){
@@ -2402,10 +2418,11 @@ function renderRedditImportSummary(){
   const users=new Set(posts.map(p=>p.username).filter(Boolean));
   const tickers=new Set(posts.flatMap(p=>p.tickers||[]));
   const kinds=posts.reduce((acc,p)=>{acc[p.kind]=(acc[p.kind]||0)+1;return acc;},{});
+  const results=storedRedditResults();
   el.innerHTML=`<div class="detail-grid" style="margin-top:10px;">
     <div class="detail-box"><div class="detail-label">IMPORTED POSTS</div><div class="detail-text">${posts.length} posts · ${users.size} users · ${tickers.size} tickers.</div></div>
     <div class="detail-box"><div class="detail-label">POST TYPES</div><div class="detail-text">${Object.entries(kinds).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${esc(k)} ${v}`).join('<br>')}</div></div>
-    <div class="detail-box"><div class="detail-label">NEXT NEEDED</div><div class="detail-text">Attach historical prices and benchmark returns before any imported username can be revealed or marked verified.</div></div>
+    <div class="detail-box"><div class="detail-label">PRICE BACKTEST</div><div class="detail-text">${results?.ok?`${results.results?.length||0} ticker outcomes measured · ${results.users?.length||0} users summarized · ${new Date(results.updatedAt).toLocaleString()}`:'Not run yet. Attach historical prices and benchmark returns before any imported username can be revealed.'}</div></div>
   </div>`;
 }
 function importRedditBacktest(e){
@@ -2426,6 +2443,29 @@ function importRedditBacktest(e){
     }
   };
   reader.readAsText(file);
+}
+async function runRedditPriceBacktest(){
+  const status=document.getElementById('reddit-import-status');
+  const posts=storedRedditPosts();
+  if(!posts.length){if(status)status.textContent='Import Reddit posts before running the price backtest.';return;}
+  if(status)status.textContent=`Running price backtest for ${posts.length} posts...`;
+  try{
+    const r=await fetch('/api/reddit-backtest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({posts})});
+    const data=await r.json();
+    if(!r.ok||!data.ok)throw new Error(data.error||'Reddit price backtest failed');
+    saveRedditResults(data);
+    if(status)status.textContent=`Backtest complete: ${data.results?.length||0} ticker outcomes, ${data.users?.length||0} users.`;
+    renderRedditScout();
+  }catch(e){
+    if(status)status.textContent='Backtest failed: '+(e.message||e);
+  }
+}
+function clearRedditBacktest(){
+  localStorage.removeItem(REDDIT_BACKTEST_STORAGE_KEY);
+  localStorage.removeItem(REDDIT_BACKTEST_RESULTS_KEY);
+  const status=document.getElementById('reddit-import-status');
+  if(status)status.textContent='Reddit backtest data cleared from this browser.';
+  renderRedditScout();
 }
 function renderRedditMethodology(){
   const el=document.getElementById('reddit-methodology');
