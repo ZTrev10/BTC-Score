@@ -505,6 +505,21 @@ td strong{color:#c8caee;font-weight:500;}
     <p class="section-label">IMPORT REDDIT BACKTEST DATA</p>
     <p style="font-size:11px;color:#5a5d8a;line-height:1.7;margin-bottom:8px;">Load a compliant CSV or JSON export of public Reddit posts. Expected fields: username, subreddit, createdAt, title, body, url, tickers, score, numComments. Usernames still stay hidden until verified.</p>
     <input class="file-input" type="file" id="reddit-backtest-file" accept=".csv,.json,application/json,text/csv" onchange="importRedditBacktest(event)">
+    <div class="form-grid">
+      <select class="small-input" id="reddit-backtest-years">
+        <option value="2">2-year pilot</option>
+        <option value="5">5-year expansion</option>
+        <option value="10">10-year full test</option>
+      </select>
+      <select class="small-input" id="reddit-backtest-ddonly">
+        <option value="yes">DD posts only</option>
+        <option value="no">All ticker posts</option>
+      </select>
+      <select class="small-input" id="reddit-backtest-options">
+        <option value="exclude">Exclude options-first</option>
+        <option value="include">Include options posts</option>
+      </select>
+    </div>
     <div class="research-actions">
       <button class="btn" onclick="runRedditPriceBacktest()">Run Price Backtest</button>
       <button class="btn" onclick="clearRedditBacktest()">Clear Reddit Data</button>
@@ -2425,6 +2440,24 @@ function renderRedditImportSummary(){
     <div class="detail-box"><div class="detail-label">PRICE BACKTEST</div><div class="detail-text">${results?.ok?`${results.results?.length||0} ticker outcomes measured · ${results.users?.length||0} users summarized · ${new Date(results.updatedAt).toLocaleString()}`:'Not run yet. Attach historical prices and benchmark returns before any imported username can be revealed.'}</div></div>
   </div>`;
 }
+function redditBacktestOptions(){
+  const years=Number(document.getElementById('reddit-backtest-years')?.value||2);
+  return {
+    years:Number.isFinite(years)?years:2,
+    ddOnly:(document.getElementById('reddit-backtest-ddonly')?.value||'yes')==='yes',
+    excludeOptions:(document.getElementById('reddit-backtest-options')?.value||'exclude')==='exclude'
+  };
+}
+function filterRedditPostsForBacktest(posts,opts=redditBacktestOptions()){
+  const cutoff=Date.now()-Math.max(1,opts.years||2)*365.25*86400000;
+  return posts.filter(p=>{
+    const ts=Date.parse(p.createdAt);
+    if(!Number.isFinite(ts)||ts<cutoff)return false;
+    if(opts.ddOnly&&!['Real DD','DD Candidate','Bear Case'].includes(p.kind))return false;
+    if(opts.excludeOptions&&/Options/.test(p.kind))return false;
+    return true;
+  }).slice(0,500);
+}
 function importRedditBacktest(e){
   const file=e.target.files[0]; if(!file)return;
   const status=document.getElementById('reddit-import-status');
@@ -2446,15 +2479,18 @@ function importRedditBacktest(e){
 }
 async function runRedditPriceBacktest(){
   const status=document.getElementById('reddit-import-status');
-  const posts=storedRedditPosts();
-  if(!posts.length){if(status)status.textContent='Import Reddit posts before running the price backtest.';return;}
-  if(status)status.textContent=`Running price backtest for ${posts.length} posts...`;
+  const allPosts=storedRedditPosts();
+  if(!allPosts.length){if(status)status.textContent='Import Reddit posts before running the price backtest.';return;}
+  const opts=redditBacktestOptions();
+  const posts=filterRedditPostsForBacktest(allPosts,opts);
+  if(!posts.length){if(status)status.textContent=`No posts matched the ${opts.years}-year ${opts.ddOnly?'DD-only':'all-posts'} filter.`;return;}
+  if(status)status.textContent=`Running ${opts.years}-year price backtest for ${posts.length} filtered posts from ${allPosts.length} imported...`;
   try{
-    const r=await fetch('/api/reddit-backtest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({posts})});
+    const r=await fetch('/api/reddit-backtest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({posts,years:opts.years,ddOnly:opts.ddOnly,excludeOptions:opts.excludeOptions})});
     const data=await r.json();
     if(!r.ok||!data.ok)throw new Error(data.error||'Reddit price backtest failed');
     saveRedditResults(data);
-    if(status)status.textContent=`Backtest complete: ${data.results?.length||0} ticker outcomes, ${data.users?.length||0} users.`;
+    if(status)status.textContent=`Backtest complete: ${data.results?.length||0} ticker outcomes, ${data.users?.length||0} users · ${opts.years}-year ${opts.ddOnly?'DD-only':'all-posts'} stage.`;
     renderRedditScout();
   }catch(e){
     if(status)status.textContent='Backtest failed: '+(e.message||e);

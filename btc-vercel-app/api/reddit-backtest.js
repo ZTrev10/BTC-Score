@@ -37,8 +37,12 @@ function rowForWindow(rows, createdTs, days) {
 }
 
 function parsePosts(input) {
+  const years = Math.max(1, Math.min(10, Number(input.years) || 2));
+  const ddOnly = input.ddOnly !== false;
+  const excludeOptions = input.excludeOptions !== false;
+  const cutoff = Date.now() - years * 365.25 * DAY_MS;
   const posts = Array.isArray(input.posts) ? input.posts : [];
-  return posts.slice(0, 500).map(post => ({
+  return posts.map(post => ({
     username: String(post.username || post.author || '').replace(/^u\//, '').trim(),
     subreddit: String(post.subreddit || ''),
     createdAt: post.createdAt || post.created || post.date || null,
@@ -49,7 +53,13 @@ function parsePosts(input) {
       .map(cleanSymbol)
       .filter(Boolean)
       .slice(0, 8)
-  })).filter(post => post.username && Date.parse(post.createdAt) && post.tickers.length);
+  })).filter(post => {
+    const ts = Date.parse(post.createdAt);
+    if (!post.username || !Number.isFinite(ts) || !post.tickers.length || ts < cutoff) return false;
+    if (ddOnly && !['Real DD', 'DD Candidate', 'Bear Case'].includes(post.kind)) return false;
+    if (excludeOptions && /Options/.test(post.kind)) return false;
+    return true;
+  }).slice(0, 500);
 }
 
 function summarizeUsers(results) {
@@ -81,7 +91,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return json(res, 204, {});
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed.' });
   try {
-    const posts = parsePosts(req.body || {});
+    const input = req.body || {};
+    const posts = parsePosts(input);
     if (!posts.length) return json(res, 400, { ok: false, error: 'No valid posts supplied.' });
 
     const earliest = Math.min(...posts.map(p => Date.parse(p.createdAt)));
@@ -143,6 +154,12 @@ export default async function handler(req, res) {
       ok: true,
       updatedAt: new Date().toISOString(),
       posts: posts.length,
+      years: Math.max(1, Math.min(10, Number(input.years) || 2)),
+      filters: {
+        ddOnly: input.ddOnly !== false,
+        excludeOptions: input.excludeOptions !== false,
+        maxPosts: 500
+      },
       tickers: symbols.filter(s => !['SPY', 'QQQ'].includes(s)),
       windows: WINDOWS,
       results,
