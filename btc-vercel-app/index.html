@@ -532,6 +532,10 @@ td strong{color:#c8caee;font-weight:500;}
   <div class="card">
     <p class="section-label">TOP SCOUT REPORT</p>
     <p style="font-size:11px;color:#3a3d6a;line-height:1.6;margin-bottom:10px;">Ranked summary of imported/backtested users. Names remain masked until the reveal rule is satisfied.</p>
+    <div class="research-actions">
+      <button class="btn" onclick="revealEligibleRedditUsers()">Reveal Eligible Users</button>
+      <button class="btn" onclick="maskAllRedditUsers()">Mask All Users</button>
+    </div>
     <div id="reddit-scout-report"></div>
   </div>
 
@@ -1959,6 +1963,7 @@ const AUTO_MEMORY_SNAPSHOT_KEY='trevor_auto_memory_snapshot_date_v1';
 const WATCHLIST_STORAGE_KEY='trevor_watchlist_v1';
 const REDDIT_BACKTEST_STORAGE_KEY='trevor_reddit_backtest_v1';
 const REDDIT_BACKTEST_RESULTS_KEY='trevor_reddit_backtest_results_v1';
+const REDDIT_REVEALED_USERS_KEY='trevor_reddit_revealed_users_v1';
 const RESEARCH_PROFILES={
   META:{name:'Meta Platforms',type:'Quality compounder',fundamental:90,thesis:86,valuation:68,macro:72,opportunity:70,summary:'Scaled ad network plus AI-enabled engagement and efficiency. Best when regulatory or reputation fear creates a valuation reset without breaking the core ad engine.',bull:'AI improves ad targeting, Reels monetization continues, WhatsApp and business messaging become larger profit pools, and Reality Labs losses stay contained.',bear:'Regulation, platform fatigue, capex intensity, or a failed metaverse/AI spending cycle could compress margins and multiple.',valuation:'Usually worth owning only with discipline. Strong business quality can justify a premium, but the best entries come after fear-driven drawdowns.',macro:'Sensitive to consumer ads, regulation, AI capex, and broad risk appetite.',risks:'Regulatory shocks, privacy changes, AI infrastructure spend, management capital allocation.'},
   COST:{name:'Costco',type:'Defensive compounder',fundamental:92,thesis:88,valuation:45,macro:78,opportunity:54,summary:'Exceptional membership model and customer loyalty. Usually a great business, but the stock often prices in that greatness.',bull:'Membership fee increases, traffic resilience, private label strength, and international growth keep compounding earnings.',bear:'Valuation can do most of the damage. If growth slows, even a wonderful business can underperform from a high multiple.',valuation:'Quality is obvious, so margin of safety is usually thin. Prefer adding on rare multiple compression.',macro:'Defensive in weak consumer environments, but not immune to wage, freight, or valuation pressure.',risks:'Premium valuation, slower same-store sales, margin pressure, limited surprise factor.'},
@@ -2319,7 +2324,8 @@ function redditScoutScore(s){
     color='#639922';
     copy='Worth tracking, but still needs more timestamped outcomes.';
   }
-  const displayName=s.reveal&&revealEligible?s.username:'Hidden until verified';
+  const revealedUsers=redditRevealedUsers();
+  const displayName=(s.reveal||revealedUsers.has(s.username))&&revealEligible?s.username:'Hidden until verified';
   const revealReason=revealEligible?'Eligible after evidence audit. Username can be revealed when you intentionally allow it.':'Locked: needs 5+ measured calls, 3+ DD posts, active within 180 days, positive alpha, win rate 55%+, low hype, and low options behavior.';
   return {score,label,color,copy,sample:Math.round(sample),consistency:Math.round(consistency),thesis:Math.round(thesis),antiHype:Math.round(antiHype),optionsPenalty:Math.round(optionsPenalty),active,dormant,oneHit,revealEligible,revealReason,displayName};
 }
@@ -2518,6 +2524,7 @@ async function runRedditPriceBacktest(){
 function clearRedditBacktest(){
   localStorage.removeItem(REDDIT_BACKTEST_STORAGE_KEY);
   localStorage.removeItem(REDDIT_BACKTEST_RESULTS_KEY);
+  localStorage.removeItem(REDDIT_REVEALED_USERS_KEY);
   const status=document.getElementById('reddit-import-status');
   if(status)status.textContent='Reddit backtest data cleared from this browser.';
   renderRedditScout();
@@ -2558,6 +2565,33 @@ function renderRedditReceipts(receipts=[]){
     return `${esc(r.ticker)} · ${new Date(r.createdAt).toLocaleDateString()} · ${win} alpha ${Number(alpha).toFixed(1)}% ${esc(bench)}${title}${link}`;
   }).join('<br>');
 }
+function redditRevealedUsers(){
+  try{return new Set(JSON.parse(localStorage.getItem(REDDIT_REVEALED_USERS_KEY)||'[]'));}catch(e){return new Set();}
+}
+function saveRedditRevealedUsers(set){
+  localStorage.setItem(REDDIT_REVEALED_USERS_KEY,JSON.stringify([...set]));
+}
+function currentRedditRows(){
+  const imported=redditImportedScouts();
+  return [...imported,...REDDIT_SCOUTS].map(s=>({...s,setup:redditScoutScore(s)})).sort((a,b)=>b.setup.score-a.setup.score);
+}
+function revealEligibleRedditUsers(){
+  const rows=currentRedditRows();
+  const eligible=rows.filter(s=>s.setup.revealEligible).map(s=>s.username);
+  const status=document.getElementById('reddit-import-status');
+  if(!eligible.length){if(status)status.textContent='No Reddit users are reveal-eligible yet. Run a backtest and require the strict evidence bar.';return;}
+  const revealed=redditRevealedUsers();
+  eligible.forEach(u=>revealed.add(u));
+  saveRedditRevealedUsers(revealed);
+  if(status)status.textContent=`Revealed ${eligible.length} eligible Reddit username${eligible.length===1?'':'s'} locally.`;
+  renderRedditScout();
+}
+function maskAllRedditUsers(){
+  localStorage.removeItem(REDDIT_REVEALED_USERS_KEY);
+  const status=document.getElementById('reddit-import-status');
+  if(status)status.textContent='All Reddit usernames are masked again.';
+  renderRedditScout();
+}
 function redditReportRows(rows){
   return rows
     .filter(s=>s.status?.startsWith('Imported')||s.measuredCalls>0)
@@ -2591,10 +2625,11 @@ function downloadRedditScoutReport(){
     if(status)status.textContent='Run a Reddit price backtest before downloading a scout report.';
     return;
   }
-  const header=['rank','display_user','reveal_eligible','label','score','measured_calls','win_rate','avg_alpha','top_tickers','best_call','worst_call'];
+  const header=['rank','display_user','actual_user_if_revealed','reveal_eligible','label','score','measured_calls','win_rate','avg_alpha','top_tickers','best_call','worst_call'];
   const csv=[header.join(',')].concat(rows.map((s,i)=>[
     i+1,
     s.setup.displayName,
+    s.setup.displayName===s.username?s.username:'',
     s.setup.revealEligible?'yes':'no',
     s.setup.label,
     s.setup.score,
@@ -2620,8 +2655,7 @@ function renderRedditScout(){
   if(status)status.textContent='V1 seed model rendered. Live Reddit API/backtest still needed before showing real verified usernames.';
   const el=document.getElementById('reddit-scout-list');
   if(!el)return;
-  const imported=redditImportedScouts();
-  const rows=[...imported,...REDDIT_SCOUTS].map(s=>({...s,setup:redditScoutScore(s)})).sort((a,b)=>b.setup.score-a.setup.score);
+  const rows=currentRedditRows();
   renderRedditUserGate(rows);
   renderRedditScoutReport(rows);
   el.innerHTML=rows.map(s=>{
