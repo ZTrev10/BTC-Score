@@ -523,6 +523,7 @@ td strong{color:#c8caee;font-weight:500;}
     <div class="research-actions">
       <button class="btn" onclick="runRedditPriceBacktest()">Run Price Backtest</button>
       <button class="btn" onclick="downloadRedditScoutReport()">Download Scout Report</button>
+      <button class="btn" onclick="downloadRedditImportTemplate()">Download Import Template</button>
       <button class="btn" onclick="clearRedditBacktest()">Clear Reddit Data</button>
     </div>
     <div class="status" id="reddit-import-status">No Reddit backtest file loaded.</div>
@@ -2414,6 +2415,35 @@ function redditRowsFromJson(text){
   if(Array.isArray(parsed.data))return parsed.data;
   return [];
 }
+function validateRedditPostRow(row){
+  const username=String(redditField(row,['username','author','user'])||'').trim();
+  const createdAt=redditField(row,['createdAt','created_utc','created','date','timestamp']);
+  const title=String(redditField(row,['title','post_title'])||'').trim();
+  const body=String(redditField(row,['body','selftext','text','comment'])||'').trim();
+  const explicit=String(redditField(row,['tickers','ticker','symbols','cashtags'])||'').trim();
+  const hasTicker=explicit||tickersFromText(`${title} ${body}`).length;
+  const issues=[];
+  if(!username)issues.push('missing username');
+  if(!Date.parse(createdAt)&&!(Number(createdAt)>1000000000))issues.push('missing/invalid date');
+  if(!title&&!body)issues.push('missing title/body');
+  if(!hasTicker)issues.push('no ticker found');
+  return issues;
+}
+function downloadRedditImportTemplate(){
+  const rows=[
+    ['username','subreddit','createdAt','title','body','url','tickers','score','numComments'],
+    ['example_value_investor','ValueInvesting','2024-03-15T14:30:00Z','Example DD: FIX backlog looks underappreciated','Thesis: data center mechanical systems demand, backlog growth, risks include labor costs and valuation.','https://reddit.com/r/example/comments/example','FIX',125,42],
+    ['example_medtech_user','stocks','2024-05-01T18:00:00Z','ISRG procedure growth follow-up','Follow-up after earnings. Procedure growth and installed base remain intact; valuation is still the main risk.','https://reddit.com/r/example/comments/example2','ISRG',88,21]
+  ];
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='reddit-backtest-import-template.csv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},0);
+}
 function redditImportedScouts(){
   const posts=storedRedditPosts();
   const results=storedRedditResults();
@@ -2491,10 +2521,15 @@ function importRedditBacktest(e){
     try{
       const text=String(ev.target.result||'');
       const raw=/\.json$/i.test(file.name)?redditRowsFromJson(text):redditRowsFromCsv(text);
-      const posts=raw.map(normalizeRedditPost).filter(p=>p.username&&p.tickers.length);
+      const issues=raw.map(validateRedditPostRow);
+      const validRows=raw.filter((_,i)=>!issues[i].length);
+      const issueCounts=issues.flat().reduce((acc,x)=>{acc[x]=(acc[x]||0)+1;return acc;},{});
+      const posts=validRows.map(normalizeRedditPost).filter(p=>p.username&&p.tickers.length);
       if(!posts.length)throw new Error('No usable Reddit rows with username and ticker were found.');
       saveRedditPosts(posts);
-      if(status)status.textContent=`Imported ${posts.length} Reddit posts from ${file.name}. Stored locally in this browser.`;
+      const skipped=raw.length-posts.length;
+      const issueText=Object.entries(issueCounts).map(([k,v])=>`${k}: ${v}`).join('; ');
+      if(status)status.textContent=`Imported ${posts.length} Reddit posts from ${file.name}. Skipped ${skipped}. ${issueText?`Issues: ${issueText}. `:''}Stored locally in this browser.`;
       renderRedditScout();
     }catch(err){
       if(status)status.textContent='Import failed: '+(err.message||err);
