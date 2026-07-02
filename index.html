@@ -2287,6 +2287,7 @@ function redditScoutScore(s){
   const dormant=Number.isFinite(activeDays)&&activeDays>180;
   const oneHit=Number(s.measuredCalls)<3||Number(s.ddPosts)<2;
   const score=Math.round(clamp(sample*0.18+consistency*0.26+thesis*0.36+antiHype*0.20-optionsPenalty-(dormant?8:0)-(oneHit?10:0)));
+  const revealEligible=active&&Number(s.measuredCalls)>=5&&Number(s.ddPosts)>=3&&score>=76&&Number(s.hypeRisk)<=35&&Number(s.optionsMentionsPct)<=20&&Number(s.avgOutperformance)>0&&Number(s.winRate)>=55;
   let label='CANDIDATE SCOUT';
   let color='#BA7517';
   let copy='Interesting lead, but not enough measured history to treat as proven.';
@@ -2302,7 +2303,7 @@ function redditScoutScore(s){
     label='DORMANT SCOUT';
     color='#6a6d9a';
     copy='Historical pattern is interesting, but the account is not active enough for current monitoring.';
-  }else if(active&&Number(s.measuredCalls)>=5&&Number(s.ddPosts)>=3&&score>=76&&Number(s.hypeRisk)<=35&&Number(s.optionsMentionsPct)<=20){
+  }else if(revealEligible){
     label='VERIFIED ACTIVE SCOUT';
     color='#1D9E75';
     copy='Strong enough timestamped record to monitor future DD posts closely. Real username may be revealed after audit.';
@@ -2311,8 +2312,9 @@ function redditScoutScore(s){
     color='#639922';
     copy='Worth tracking, but still needs more timestamped outcomes.';
   }
-  const displayName=s.reveal&&label==='VERIFIED ACTIVE SCOUT'?s.username:'Hidden until verified';
-  return {score,label,color,copy,sample:Math.round(sample),consistency:Math.round(consistency),thesis:Math.round(thesis),antiHype:Math.round(antiHype),optionsPenalty:Math.round(optionsPenalty),active,dormant,oneHit,displayName};
+  const displayName=s.reveal&&revealEligible?s.username:'Hidden until verified';
+  const revealReason=revealEligible?'Eligible after evidence audit. Username can be revealed when you intentionally allow it.':'Locked: needs 5+ measured calls, 3+ DD posts, active within 180 days, positive alpha, win rate 55%+, low hype, and low options behavior.';
+  return {score,label,color,copy,sample:Math.round(sample),consistency:Math.round(consistency),thesis:Math.round(thesis),antiHype:Math.round(antiHype),optionsPenalty:Math.round(optionsPenalty),active,dormant,oneHit,revealEligible,revealReason,displayName};
 }
 function redditTickerResearch(ticker){
   const sym=cleanSymbol(ticker);
@@ -2360,10 +2362,12 @@ function tickersFromText(text=''){
 }
 function classifyRedditPost(post){
   const text=`${post.title||''} ${post.body||''}`.toLowerCase();
+  const follow=/(update|follow[- ]?up|checking back|as promised|position update|thesis update|part 2|part two|revisiting|after earnings)/.test(text);
   const options=/(0dte|weekly|weeklies|calls?|puts?|straddle|strangle|leaps?|iv crush|gamma|theta|expiry|expiration|yolo)/.test(text);
   const hype=/(moon|rocket|squeeze|short interest|diamond hands|bagholder|ten[- ]?bagger by|multibagger by friday|load up|can't lose)/.test(text);
   const bear=/(bear case|downside|risk|risks|concern|margin pressure|debt|dilution|valuation risk|competition)/.test(text);
   const dd=/(dd|due diligence|thesis|valuation|cash flow|fcf|backlog|guidance|revenue|margin|moat|tam|catalyst|earnings|10-k|10-q|sec filing)/.test(text);
+  if(follow)return 'Follow-up';
   if(options&&hype)return 'Options/Hype';
   if(options)return 'Options Mention';
   if(hype&&!dd)return 'Squeeze/Meme';
@@ -2399,7 +2403,13 @@ function redditRowsFromJson(text){
 }
 function redditImportedScouts(){
   const posts=storedRedditPosts();
-  const resultMap=new Map((storedRedditResults()?.users||[]).map(u=>[u.username,u]));
+  const results=storedRedditResults();
+  const resultMap=new Map((results?.users||[]).map(u=>[u.username,u]));
+  const receiptMap=new Map();
+  (results?.results||[]).forEach(r=>{
+    if(!receiptMap.has(r.username))receiptMap.set(r.username,[]);
+    receiptMap.get(r.username).push(r);
+  });
   const byUser=new Map();
   posts.forEach(p=>{
     if(!p.username||p.username==='unknown')return;
@@ -2422,7 +2432,8 @@ function redditImportedScouts(){
     const measuredCalls=Number(measured?.measuredCalls)||0;
     const winRate=Number.isFinite(Number(measured?.winRate))?Number(measured.winRate):0;
     const avgOutperformance=Number.isFinite(Number(measured?.avgOutperformance))?Number(measured.avgOutperformance):0;
-    return {username,reveal:false,status:measuredCalls?'Imported / price backtested':'Imported / needs price backtest',lastActiveDays,accountAgeYears,optionsMentionsPct,specialty:tickers.length?`Imported lead: ${tickers.join(', ')}`:'Imported Reddit lead',subreddits:[...new Set(items.map(p=>p.subreddit).filter(Boolean))].slice(0,4),clearCalls:dd.length,measuredCalls,ddPosts:dd.length,winRate,avgOutperformance,earlyScore:dd.length>=3?68:48,specificity:dd.length?68:42,riskHonesty:items.some(p=>p.kind==='Real DD'||p.kind==='Bear Case')?70:42,hypeRisk:Math.min(100,Math.round(hype.length/Math.max(1,items.length)*100)+optionsMentionsPct),tickers,bestCall:measured?.bestCall||'Imported posts are parsed. Price-history backtest still needed before ranking calls.',worstCall:measured?.worstCall||'No outcome history attached yet, so this user cannot be verified or revealed.',note:`${items.length} imported posts · ${dd.length} DD-like · ${options.length} options-related${measuredCalls?` · ${measuredCalls} measured outcomes`:''}.`};
+    const receipts=(receiptMap.get(username)||[]).filter(r=>Number.isFinite(r.alpha?.m6??r.alpha?.m3??r.alpha?.m1)).sort((a,b)=>(b.alpha?.m6??b.alpha?.m3??b.alpha?.m1??-999)-(a.alpha?.m6??a.alpha?.m3??a.alpha?.m1??-999)).slice(0,5);
+    return {username,reveal:false,status:measuredCalls?'Imported / price backtested':'Imported / needs price backtest',lastActiveDays,accountAgeYears,optionsMentionsPct,specialty:tickers.length?`Imported lead: ${tickers.join(', ')}`:'Imported Reddit lead',subreddits:[...new Set(items.map(p=>p.subreddit).filter(Boolean))].slice(0,4),clearCalls:dd.length,measuredCalls,ddPosts:dd.length,winRate,avgOutperformance,earlyScore:dd.length>=3?68:48,specificity:dd.length?68:42,riskHonesty:items.some(p=>p.kind==='Real DD'||p.kind==='Bear Case')?70:42,hypeRisk:Math.min(100,Math.round(hype.length/Math.max(1,items.length)*100)+optionsMentionsPct),tickers,bestCall:measured?.bestCall||'Imported posts are parsed. Price-history backtest still needed before ranking calls.',worstCall:measured?.worstCall||'No outcome history attached yet, so this user cannot be verified or revealed.',receipts,note:`${items.length} imported posts · ${dd.length} DD-like · ${options.length} options-related${measuredCalls?` · ${measuredCalls} measured outcomes`:''}.`};
   });
 }
 function renderRedditImportSummary(){
@@ -2521,11 +2532,22 @@ function renderRedditUserGate(rows=[]){
   const counts=rows.reduce((acc,s)=>{acc[s.setup.label]=(acc[s.setup.label]||0)+1;return acc;},{});
   const verified=counts['VERIFIED ACTIVE SCOUT']||0;
   const hidden=rows.filter(s=>!s.reveal).length;
+  const eligible=rows.filter(s=>s.setup.revealEligible).length;
   el.innerHTML=`<div class="detail-grid">
-    <div class="detail-box"><div class="detail-label">USERNAMES REVEALED</div><div class="detail-text">${verified&&rows.some(s=>s.reveal)?verified:0} shown · ${hidden} hidden pending evidence audit.</div></div>
+    <div class="detail-box"><div class="detail-label">USERNAMES REVEALED</div><div class="detail-text">${verified&&rows.some(s=>s.reveal)?verified:0} shown · ${eligible} reveal-eligible · ${hidden} hidden pending evidence audit.</div></div>
     <div class="detail-box"><div class="detail-label">REVEAL RULE</div><div class="detail-text">Only reveal public usernames after real post IDs, timestamps, benchmarked outcomes, activity status, and options-hype checks are attached.</div></div>
     <div class="detail-box"><div class="detail-label">BUY/HOLD BIAS</div><div class="detail-text">Options-first accounts can still be tracked, but they cannot become verified active scouts unless underlying stock DD is the main signal.</div></div>
   </div>`;
+}
+function renderRedditReceipts(receipts=[]){
+  if(!receipts.length)return 'No measured receipts yet. Run the price backtest after importing posts.';
+  return receipts.map(r=>{
+    const alpha=r.alpha?.m6??r.alpha?.m3??r.alpha?.m1;
+    const win=r.alpha?.m6!=null?'6M':r.alpha?.m3!=null?'3M':'1M';
+    const title=r.title?` · ${r.title.slice(0,90)}`:'';
+    const link=r.url?` <a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:#9a9dcc;text-decoration:none;">post</a>`:'';
+    return `${esc(r.ticker)} · ${new Date(r.createdAt).toLocaleDateString()} · ${win} alpha ${Number(alpha).toFixed(1)}%${title}${link}`;
+  }).join('<br>');
 }
 function renderRedditScout(){
   renderRedditMethodology();
@@ -2566,9 +2588,10 @@ function renderRedditScout(){
         <div class="detail-grid">
           <div class="detail-box"><div class="detail-label">SCOUT READ</div><div class="detail-text"><span style="color:${setup.color};">${setup.label}</span> · ${esc(setup.copy)} ${esc(s.note)}</div></div>
           <div class="detail-box"><div class="detail-label">SCORE BREAKDOWN</div><div class="detail-text">Sample ${setup.sample}/100 · Consistency ${setup.consistency}/100 · Thesis quality ${setup.thesis}/100 · Anti-hype ${setup.antiHype}/100 · Options penalty ${setup.optionsPenalty}.</div></div>
-          <div class="detail-box"><div class="detail-label">ACTIVITY / REVEAL STATUS</div><div class="detail-text">${esc(accountAge)} · ${esc(activeText)}. Username remains hidden unless the account is verified active with attached evidence.</div></div>
+          <div class="detail-box"><div class="detail-label">ACTIVITY / REVEAL STATUS</div><div class="detail-text">${esc(accountAge)} · ${esc(activeText)}. ${esc(setup.revealReason)}</div></div>
           <div class="detail-box"><div class="detail-label">BEST EARLY CALL</div><div class="detail-text">${esc(s.bestCall)}</div></div>
           <div class="detail-box"><div class="detail-label">WORST / RISK CHECK</div><div class="detail-text">${esc(s.worstCall)}</div></div>
+          <div class="detail-box"><div class="detail-label">EVIDENCE RECEIPTS</div><div class="detail-text">${renderRedditReceipts(s.receipts||[])}</div></div>
           <div class="detail-box"><div class="detail-label">TICKERS TO RESEARCH</div><div class="detail-text">${(s.tickers||[]).map(esc).join(', ')}</div></div>
           <div class="detail-box"><div class="detail-label">VERIFICATION NEEDED</div><div class="detail-text">Replace this seed profile with real post IDs, original timestamps, archived text, post-time price, later returns, benchmark alpha, and deleted/edited-post checks.</div></div>
         </div>
